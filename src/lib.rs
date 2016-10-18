@@ -1,8 +1,10 @@
 pub extern crate typenum;
+extern crate arrayvec;
 
 use typenum::consts::*;
 use typenum::operator_aliases::Prod;
 use typenum::Unsigned;
+use arrayvec::ArrayVec;
 use std::ops::{Deref, DerefMut, Add, Sub, Mul, Index, IndexMut};
 
 /// A fixed-size array.
@@ -22,6 +24,28 @@ impl<T, N: ArrayLen<T>> Array<T, N> {
     pub fn new(array: N::Array) -> Self {
         Array(array)
     }
+
+    #[inline]
+    pub fn into_inner(self) -> N::Array {
+        self.0
+    }
+}
+
+impl<T, N> Clone for Array<T, N>
+    where
+        N: ArrayLen<T>,
+        N::Array: Clone
+{
+    fn clone(&self) -> Self {
+        Array(self.0.clone())
+    }
+}
+
+impl<T, N> Copy for Array<T, N>
+    where
+        N: ArrayLen<T>,
+        N::Array: Copy
+{
 }
 
 impl<T, N> Default for Array<T, N>
@@ -57,7 +81,7 @@ impl<T, N> DerefMut for Array<T, N>
 }
 
 pub trait ArrayLen<T> {
-    type Array: AsRef<[T]> + AsMut<[T]>;
+    type Array: AsRef<[T]> + AsMut<[T]> + arrayvec::Array<Item = T>;
 }
 
 macro_rules! impl_arraylen {
@@ -121,25 +145,13 @@ fn test_array() {
 ///
 /// m[(1,1)] = 1;
 /// m[(1,2)] = 2;
-/// assert_eq!(m.rows_cloned().nth(1), Some([0, 1, 0]));
-/// assert_eq!(m.cols_cloned().nth(1), Some([0, 1, 2]));
+/// assert_eq!(m.rows().nth(1), Some([0, 1, 0]));
+/// assert_eq!(m.cols().nth(1), Some([0, 1, 2]));
 /// ```
 pub struct Matrix<T, Row, Col>(Array<T, Prod<Row, Col>>)
     where
         Row: Mul<Col>,
         <Row as Mul<Col>>::Output: ArrayLen<T>;
-
-impl<T, Row, Col> Default for Matrix<T, Row, Col>
-    where
-        Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
-        <Prod<Row, Col> as ArrayLen<T>>::Array: Default
-{
-    #[inline]
-    fn default() -> Self {
-        Matrix(Default::default())
-    }
-}
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
@@ -153,9 +165,45 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     }
 
     #[inline]
+    fn from_array(arr: <<Row as Mul<Col>>::Output as ArrayLen<T>>::Array) -> Matrix<T, Row, Col> {
+        Matrix::new(Array::new(arr))
+    }
+
+    #[inline]
     pub fn dim() -> (usize, usize) {
         (Row::to_usize(), Col::to_usize())
     }
+}
+
+impl<T, Row, Col> Default for Matrix<T, Row, Col>
+    where
+        Row: Mul<Col>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        <Prod<Row, Col> as ArrayLen<T>>::Array: Default
+{
+    #[inline]
+    fn default() -> Self {
+        Matrix(Default::default())
+    }
+}
+
+impl<T, Row, Col> Clone for Matrix<T, Row, Col>
+    where
+        Row: Mul<Col>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        <Prod<Row, Col> as ArrayLen<T>>::Array: Clone
+{
+    fn clone(&self) -> Self {
+        Matrix(self.0.clone())
+    }
+}
+
+impl<T, Row, Col> Copy for Matrix<T, Row, Col>
+    where
+        Row: Mul<Col>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        <Prod<Row, Col> as ArrayLen<T>>::Array: Copy
+{
 }
 
 impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
@@ -190,72 +238,69 @@ impl<T, Row, Col> IndexMut<(usize, usize)> for Matrix<T, Row, Col>
     }
 }
 
-impl<T, Row, Col> Add for Matrix<T, Row, Col>
+impl<T, U, Row, Col> Add<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
     where
-        T: Add<Output = T>,
-        Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        T: Add<U>,
+        Row: Mul<Col> + Unsigned,
+        Col: Unsigned,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        <Row as Mul<Col>>::Output: ArrayLen<U>,
+        <Row as Mul<Col>>::Output: ArrayLen<<T as Add<U>>::Output>
 {
-    type Output = Self;
+    type Output = Matrix<<T as Add<U>>::Output, Row, Col>;
 
-    fn add(self, rhs: Matrix<T, Row, Col>) -> Self {
-        unsafe {
-            use std::{mem, ptr};
+    fn add(self, rhs: Matrix<U, Row, Col>) -> Self::Output {
+        let xs: ArrayVec<_> = self.0.into_inner().into();
+        let ys: ArrayVec<_> = rhs.0.into_inner().into();
 
-            let p1 = self.0.as_ref().as_ptr() as *const T;
-            let p2 = rhs.0.as_ref().as_ptr() as *const T;
+        let mut res = ArrayVec::new();
 
-            mem::forget(self);
-            mem::forget(rhs);
-
-            let mut arr: <<Row as Mul<Col>>::Output as ArrayLen<T>>::Array = mem::uninitialized();
-            for (i, e) in arr.as_mut().into_iter().enumerate() {
-                mem::forget(mem::replace(e, ptr::read(p1.offset(i as isize)) + ptr::read(p2.offset(i as isize))));
-            }
-
-            Matrix(Array::new(arr))
+        for (x, y) in xs.into_iter().zip(ys) {
+            res.push(x + y);
         }
+
+        Matrix::from_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
     }
 }
 
-impl<T, Row, Col> Sub for Matrix<T, Row, Col>
+impl<T, U, Row, Col> Sub<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
     where
-        T: Sub<Output = T>,
-        Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        T: Sub<U>,
+        Row: Mul<Col> + Unsigned,
+        Col: Unsigned,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        <Row as Mul<Col>>::Output: ArrayLen<U>,
+        <Row as Mul<Col>>::Output: ArrayLen<<T as Sub<U>>::Output>
 {
-    type Output = Self;
+    type Output = Matrix<<T as Sub<U>>::Output, Row, Col>;
 
-    fn sub(self, rhs: Matrix<T, Row, Col>) -> Self {
-        unsafe {
-            use std::{mem, ptr};
+    fn sub(self, rhs: Matrix<U, Row, Col>) -> Self::Output {
+        let xs: ArrayVec<_> = self.0.into_inner().into();
+        let ys: ArrayVec<_> = rhs.0.into_inner().into();
 
-            let p1 = self.0.as_ref().as_ptr() as *const T;
-            let p2 = rhs.0.as_ref().as_ptr() as *const T;
+        let mut res = ArrayVec::new();
 
-            mem::forget(self);
-            mem::forget(rhs);
-
-            let mut arr: <<Row as Mul<Col>>::Output as ArrayLen<T>>::Array = mem::uninitialized();
-            for (i, e) in arr.as_mut().into_iter().enumerate() {
-                mem::forget(mem::replace(e, ptr::read(p1.offset(i as isize)) - ptr::read(p2.offset(i as isize))));
-            }
-
-            Matrix(Array::new(arr))
+        for (x, y) in xs.into_iter().zip(ys) {
+            res.push(x - y);
         }
+
+        Matrix::from_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
     }
 }
 
 #[test]
-fn test_matrix_add() {
+fn test_matrix_add_sub() {
     let mut m1 = Matrix::<i32, U2, U2>::default();
     m1[(1,1)] = 4;
     m1[(0,0)] = 1;
-    let mut m2 = Matrix::<i32, U2, U2>::default();
-    m2[(1,1)] = 1;
+    let m2 = Matrix::<i32, U2, U2>::from_array([0, 0, 0, 1]);
+    assert_eq!(m2[(1, 1)], 1);
     let m3 = m1 + m2;
     assert_eq!(m3[(0,0)], 1);
     assert_eq!(m3[(1,1)], 5);
+    let m4 = m1 - m2;
+    assert_eq!(m4[(0,0)], 1);
+    assert_eq!(m4[(1,1)], 3);
 }
 
 impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
@@ -265,7 +310,7 @@ impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
         <Row as Mul<Col>>::Output: ArrayLen<T>
 {
     #[inline]
-    pub fn rows(&'a self) -> RowsIter<'a, T, Row, Col> {
+    pub fn rows_ref(&'a self) -> RowsIter<'a, T, Row, Col> {
         RowsIter(&*self.0, 0)
     }
 }
@@ -278,7 +323,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         <Row as Mul<Col>>::Output: ArrayLen<T>
 {
     #[inline]
-    pub fn rows_cloned(&self) -> RowsClonedIter<T, Row, Col> {
+    pub fn rows(&self) -> RowsClonedIter<T, Row, Col> {
         RowsClonedIter(&*self.0, 0)
     }
 }
@@ -290,7 +335,7 @@ impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
         <Row as Mul<Col>>::Output: ArrayLen<T>
 {
     #[inline]
-    pub fn cols(&'a self) -> ColsIter<'a, T, Row, Col> {
+    pub fn cols_ref(&'a self) -> ColsIter<'a, T, Row, Col> {
         ColsIter(&*self.0, 0)
     }
 }
@@ -303,7 +348,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         <Row as Mul<Col>>::Output: ArrayLen<T>
 {
     #[inline]
-    pub fn cols_cloned(&self) -> ColsClonedIter<T, Row, Col> {
+    pub fn cols(&self) -> ColsClonedIter<T, Row, Col> {
         ColsClonedIter(&*self.0, 0)
     }
 }
@@ -331,16 +376,15 @@ macro_rules! decl_row_iter {
                     let s = self.1;
                     self.1 += 1;
 
-                    unsafe {
-                        use std::mem;
-
-                        let mut arr: Self::Item = mem::uninitialized();
-                        for (a, b) in arr.as_mut().iter_mut().zip(&self.0.as_ref()[s * Col::to_usize() .. (s + 1) * Col::to_usize()]) {
-                            let mut b: $item = b.clone();
-                            mem::forget(mem::swap(a, &mut b));
-                        }
-                        Some(arr)
+                    let mut arr = ArrayVec::new();
+                    for x in &self.0.as_ref()[s * Col::to_usize() .. (s + 1) * Col::to_usize()] {
+                        // no-op for `&T`
+                        let x: $item = x.clone();
+                        arr.push(x);
                     }
+                    debug_assert!(arr.is_full());
+
+                    Some(arr.into_inner().unwrap_or_else(|_| unreachable!()))
                 } else {
                     None
                 }
@@ -398,16 +442,15 @@ macro_rules! decl_col_iter {
                     let s = self.1;
                     self.1 += 1;
 
-                    unsafe {
-                        use std::mem;
-
-                        let mut arr: Self::Item = mem::uninitialized();
-                        for (a, b) in arr.as_mut().iter_mut().zip((0..Row::to_usize()).map(|i| &self.0.as_ref()[Col::to_usize() * i + s])) {
-                            let mut b: $item = b.clone();
-                            mem::forget(mem::swap(a, &mut b));
-                        }
-                        Some(arr)
+                    let mut arr = ArrayVec::new();
+                    for x in (0..Row::to_usize()).map(|i| &self.0.as_ref()[Col::to_usize() * i + s]) {
+                        // no-op for `&T`
+                        let x: $item = x.clone();
+                        arr.push(x);
                     }
+                    debug_assert!(arr.is_full());
+
+                    Some(arr.into_inner().unwrap_or_else(|_| unreachable!()))
                 } else {
                     None
                 }
@@ -456,7 +499,7 @@ fn test_matrix_rows_cols_iter() {
     m[(2,2)] = 3;
     m[(0,2)] = 4;
 
-    let mut rows = m.rows();
+    let mut rows = m.rows_ref();
 
     assert_eq!(rows.len(), 3);
     assert!(rows.next().unwrap().iter().eq(&[&1, &0, &0]));
@@ -464,7 +507,7 @@ fn test_matrix_rows_cols_iter() {
     assert!(rows.next().unwrap().iter().eq(&[&4, &0, &3]));
     assert_eq!(rows.next(), None);
 
-    let mut cols = m.cols();
+    let mut cols = m.cols_ref();
 
     assert_eq!(cols.len(), 3);
     assert!(cols.next().unwrap().iter().eq(&[&1, &0, &4]));
@@ -472,7 +515,7 @@ fn test_matrix_rows_cols_iter() {
     assert!(cols.next().unwrap().iter().eq(&[&0, &0, &3]));
     assert_eq!(cols.next(), None);
 
-    let mut rows = m.rows_cloned();
+    let mut rows = m.rows();
 
     assert_eq!(rows.len(), 3);
     assert!(rows.next().unwrap().iter().eq(&[1, 0, 0]));
@@ -480,7 +523,7 @@ fn test_matrix_rows_cols_iter() {
     assert!(rows.next().unwrap().iter().eq(&[4, 0, 3]));
     assert_eq!(rows.next(), None);
 
-    let mut cols = m.cols_cloned();
+    let mut cols = m.cols();
 
     assert_eq!(cols.len(), 3);
     assert!(cols.next().unwrap().iter().eq(&[1, 0, 4]));

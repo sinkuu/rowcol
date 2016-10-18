@@ -5,4 +5,4 @@ authors = ["sinkuu <sinkuupump@gmail.com>"]
 
 [dependencies]
 typenum = "1.3.2"
-clippy = { version = "*", optional = true }
+arrayvec = "0.3.20"
