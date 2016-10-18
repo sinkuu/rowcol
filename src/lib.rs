@@ -7,6 +7,7 @@ use typenum::Unsigned;
 use arrayvec::ArrayVec;
 use std::ops::{Deref, DerefMut, Add, Sub, Mul, Index, IndexMut};
 
+// TODO: make it a private, internal type
 /// A fixed-size array.
 ///
 /// ```rust
@@ -141,12 +142,13 @@ fn test_array() {
 /// ```rust
 /// # use static_array::typenum::consts::*;
 /// # use static_array::Matrix;
-/// let mut m = Matrix::<i32, U3, U3>::default();
+/// let mut m = Matrix::<i32, U3, U3>::from_array([[0, 0, 0], [0, 1, 0], [0, 2, 0]]);
 ///
-/// m[(1,1)] = 1;
-/// m[(1,2)] = 2;
+/// assert_eq!(m[(1,1)], 1);
+/// assert_eq!(m[(1,2)], 2);
 /// assert_eq!(m.rows().nth(1), Some([0, 1, 0]));
 /// assert_eq!(m.cols().nth(1), Some([0, 1, 2]));
+/// assert_eq!(m + m, Matrix::from_array([[0, 0, 0], [0, 2, 0], [0, 4, 0]]));
 /// ```
 pub struct Matrix<T, Row, Col>(Array<T, Prod<Row, Col>>)
     where
@@ -164,8 +166,9 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Matrix(arr)
     }
 
-    #[inline]
-    fn from_array(arr: <<Row as Mul<Col>>::Output as ArrayLen<T>>::Array) -> Matrix<T, Row, Col> {
+    pub fn from_inner(arr: <<Row as Mul<Col>>::Output as ArrayLen<T>>::Array)
+        -> Matrix<T, Row, Col>
+    {
         Matrix::new(Array::new(arr))
     }
 
@@ -174,6 +177,26 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         (Row::to_usize(), Col::to_usize())
     }
 }
+
+impl<T, Row, Col> Matrix<T, Row, Col>
+    where
+        Row: Mul<Col> + Unsigned + ArrayLen<<Col as ArrayLen<T>>::Array>,
+        Col: Unsigned + ArrayLen<T>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>
+{
+    #[inline]
+    pub fn from_array(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
+        -> Matrix<T, Row, Col>
+    {
+        let mut arr = ArrayVec::new();
+        for row in ArrayVec::from(rows).into_iter() {
+            arr.extend(ArrayVec::from(row).into_iter());
+        }
+        debug_assert!(arr.is_full());
+        Matrix::new(Array::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
+    }
+}
+
 
 impl<T, Row, Col> Default for Matrix<T, Row, Col>
     where
@@ -204,6 +227,36 @@ impl<T, Row, Col> Copy for Matrix<T, Row, Col>
         <Row as Mul<Col>>::Output: ArrayLen<T>,
         <Prod<Row, Col> as ArrayLen<T>>::Array: Copy
 {
+}
+
+impl<T, Row, Col> PartialEq for Matrix<T, Row, Col>
+    where
+        Row: Mul<Col>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        <Prod<Row, Col> as ArrayLen<T>>::Array: PartialEq
+{
+    fn eq(&self, rhs: &Matrix<T, Row, Col>) -> bool {
+        (self.0).0 == (rhs.0).0
+    }
+}
+
+impl<T, Row, Col> Eq for Matrix<T, Row, Col>
+    where
+        Row: Mul<Col>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        <Prod<Row, Col> as ArrayLen<T>>::Array: Eq
+{
+}
+
+impl<T, Row, Col> ::std::fmt::Debug for Matrix<T, Row, Col>
+    where
+        Row: Mul<Col>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        <Prod<Row, Col> as ArrayLen<T>>::Array: ::std::fmt::Debug
+{
+    fn fmt(&self, fmt: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+        (self.0).0.fmt(fmt)
+    }
 }
 
 impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
@@ -259,7 +312,7 @@ impl<T, U, Row, Col> Add<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
             res.push(x + y);
         }
 
-        Matrix::from_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+        Matrix::from_inner(res.into_inner().unwrap_or_else(|_| unreachable!()))
     }
 }
 
@@ -284,16 +337,50 @@ impl<T, U, Row, Col> Sub<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
             res.push(x - y);
         }
 
-        Matrix::from_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+        Matrix::from_inner(res.into_inner().unwrap_or_else(|_| unreachable!()))
+    }
+}
+
+impl<T, U, N, LRow, RCol> Mul<Matrix<U, N, RCol>> for Matrix<T, LRow, N>
+    where
+        T: Mul<U> + Clone,
+        U: Clone,
+        N: Mul<RCol> + Unsigned + ArrayLen<U> + ArrayLen<T>,
+        <N as ArrayLen<T>>::Array: Clone,
+        <N as ArrayLen<U>>::Array: Clone,
+        RCol: Unsigned,
+        LRow: Unsigned + Mul<N> + Mul<RCol>,
+        <LRow as Mul<N>>::Output: ArrayLen<T>,
+        <N as Mul<RCol>>::Output: ArrayLen<U>,
+        <T as Mul<U>>::Output: ::std::iter::Sum,
+        <LRow as Mul<RCol>>::Output: ArrayLen<<T as Mul<U>>::Output>
+{
+    type Output = Matrix<<T as Mul<U>>::Output, LRow, RCol>;
+
+    fn mul(self, rhs: Matrix<U, N, RCol>) -> Self::Output {
+        let mut res = ArrayVec::new();
+
+        for lrow in self.rows() {
+            for rcol in rhs.cols() {
+                let s = ArrayVec::from(lrow.clone()).into_iter().zip(ArrayVec::from(rcol))
+                    .map(|(a, b)| a * b)
+                    .sum();
+                res.push(s);
+            }
+        }
+
+        debug_assert!(res.is_full());
+
+        Matrix::from_inner(res.into_inner().unwrap_or_else(|_| unreachable!()))
     }
 }
 
 #[test]
-fn test_matrix_add_sub() {
+fn test_matrix_add_sub_mul() {
     let mut m1 = Matrix::<i32, U2, U2>::default();
     m1[(1,1)] = 4;
     m1[(0,0)] = 1;
-    let m2 = Matrix::<i32, U2, U2>::from_array([0, 0, 0, 1]);
+    let m2 = Matrix::from_array([[0, 0], [0, 1]]);
     assert_eq!(m2[(1, 1)], 1);
     let m3 = m1 + m2;
     assert_eq!(m3[(0,0)], 1);
@@ -301,6 +388,10 @@ fn test_matrix_add_sub() {
     let m4 = m1 - m2;
     assert_eq!(m4[(0,0)], 1);
     assert_eq!(m4[(1,1)], 3);
+    let id = Matrix::from_array([[1, 0], [0, 1]]);
+    assert_eq!(m1, m1 * id);
+    let m5 = Matrix::<i32, U2, U2>::from_array([[1, 2], [3, 4]]);
+    assert_eq!(m4 * m5, Matrix::from_array([[1, 2], [9, 12]]));
 }
 
 impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
