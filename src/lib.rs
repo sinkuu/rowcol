@@ -11,8 +11,8 @@ use std::ops::{Deref, DerefMut, Add, Sub, Mul, Index, IndexMut};
 /// A fixed-size array.
 ///
 /// ```rust
-/// # use static_array::typenum::consts::*;
-/// # use static_array::Array;
+/// # use static_matrix::typenum::consts::*;
+/// # use static_matrix::Array;
 ///
 /// let arr = Array::<i32, U5>::new([1, 2, 3, 4, 5]);
 /// assert_eq!(*arr, [1, 2, 3, 4, 5]);
@@ -140,8 +140,8 @@ fn test_array() {
 /// A fixed-size matrix.
 ///
 /// ```rust
-/// # use static_array::typenum::consts::*;
-/// # use static_array::Matrix;
+/// # use static_matrix::typenum::consts::*;
+/// # use static_matrix::Matrix;
 /// let mut m = Matrix::<i32, U3, U3>::from_array([[0, 0, 0], [0, 1, 0], [0, 2, 0]]);
 ///
 /// assert_eq!(m[(1,1)], 1);
