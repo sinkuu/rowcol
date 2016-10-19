@@ -7,7 +7,7 @@ use typenum::Unsigned;
 use arrayvec::ArrayVec;
 use std::ops::{Deref, DerefMut, Add, Sub, Mul, Index, IndexMut};
 
-// TODO: make it a private, internal type
+// TODO: rename to Vector?
 /// A fixed-size array.
 ///
 /// ```rust
@@ -157,8 +157,7 @@ pub struct Matrix<T, Row, Col>(Array<T, Prod<Row, Col>>)
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + Unsigned,
-        Col: Unsigned,
+        Row: Mul<Col>,
         <Row as Mul<Col>>::Output: ArrayLen<T>
 {
     #[inline]
@@ -171,7 +170,14 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     {
         Matrix::new(Array::new(arr))
     }
+}
 
+impl<T, Row, Col> Matrix<T, Row, Col>
+    where
+        Row: Mul<Col> + Unsigned,
+        Col: Unsigned,
+        <Row as Mul<Col>>::Output: ArrayLen<T>
+{
     #[inline]
     pub fn dim() -> (usize, usize) {
         (Row::to_usize(), Col::to_usize())
@@ -189,8 +195,8 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         -> Matrix<T, Row, Col>
     {
         let mut arr = ArrayVec::new();
-        for row in ArrayVec::from(rows).into_iter() {
-            arr.extend(ArrayVec::from(row).into_iter());
+        for row in ArrayVec::from(rows) {
+            arr.extend(ArrayVec::from(row));
         }
         debug_assert!(arr.is_full());
         Matrix::new(Array::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
@@ -341,23 +347,65 @@ impl<T, U, Row, Col> Sub<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
     }
 }
 
-impl<T, U, N, LRow, RCol> Mul<Matrix<U, N, RCol>> for Matrix<T, LRow, N>
+/*
+impl<T, U, Row, Col> Mul<U> for Matrix<T, Row, Col>
     where
-        T: Mul<U> + Clone,
+        T: Mul<U>,
         U: Clone,
-        N: Mul<RCol> + Unsigned + ArrayLen<U> + ArrayLen<T>,
+        Row: Mul<Col>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+{
+    type Output = Matrix<<T as Mul<U>>::Output, Row, Col>;
+
+    fn mul(self, rhs: U) -> Self::Output {
+        let mut arr = ArrayVec::new();
+
+        for x in self.0 {
+            arr.push(x * rhs.clone());
+        }
+
+        debug_assert!(arr.is_full());
+        Matrix::from_inner(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+    }
+}
+*/
+
+impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
+    where
+        T: Mul + Clone,
+        Row: Mul<Col>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        <Row as Mul<Col>>::Output: ArrayLen<<T as Mul>::Output>,
+{
+    type Output = Matrix<<T as Mul>::Output, Row, Col>;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        let mut arr = ArrayVec::new();
+
+        for x in ArrayVec::from(self.0.into_inner()) {
+            arr.push(x * rhs.clone());
+        }
+
+        debug_assert!(arr.is_full());
+        Matrix::from_inner(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+    }
+}
+
+impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
+    where
+        T: Mul<T, Output = T> + Clone + ::std::iter::Sum,
+        N: Mul<RCol> + Unsigned + ArrayLen<T>,
         <N as ArrayLen<T>>::Array: Clone,
-        <N as ArrayLen<U>>::Array: Clone,
         RCol: Unsigned,
         LRow: Unsigned + Mul<N> + Mul<RCol>,
         <LRow as Mul<N>>::Output: ArrayLen<T>,
-        <N as Mul<RCol>>::Output: ArrayLen<U>,
-        <T as Mul<U>>::Output: ::std::iter::Sum,
-        <LRow as Mul<RCol>>::Output: ArrayLen<<T as Mul<U>>::Output>
+        <N as Mul<RCol>>::Output: ArrayLen<T>,
+        <LRow as Mul<RCol>>::Output: ArrayLen<<T as Mul>::Output>,
+        <LRow as Mul<RCol>>::Output: ArrayLen<T>
 {
-    type Output = Matrix<<T as Mul<U>>::Output, LRow, RCol>;
+    type Output = Matrix<<T as Mul>::Output, LRow, RCol>;
 
-    fn mul(self, rhs: Matrix<U, N, RCol>) -> Self::Output {
+    fn mul(self, rhs: Matrix<T, N, RCol>) -> Self::Output {
         let mut res = ArrayVec::new();
 
         for lrow in self.rows() {
@@ -391,7 +439,7 @@ fn test_matrix_add_sub_mul() {
     let id = Matrix::from_array([[1, 0], [0, 1]]);
     assert_eq!(m1, m1 * id);
     let m5 = Matrix::<i32, U2, U2>::from_array([[1, 2], [3, 4]]);
-    assert_eq!(m4 * m5, Matrix::from_array([[1, 2], [9, 12]]));
+    assert_eq!(m4 * m5 * 2, Matrix::from_array([[2, 4], [18, 24]]));
 }
 
 impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
