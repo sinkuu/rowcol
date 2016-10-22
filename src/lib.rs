@@ -1,66 +1,80 @@
 pub extern crate typenum;
 extern crate arrayvec;
+extern crate num;
 
 use typenum::consts::*;
-use typenum::operator_aliases::Prod;
-use typenum::Unsigned;
-use arrayvec::ArrayVec;
-use std::ops::{Deref, DerefMut, Add, Sub, Mul, Index, IndexMut};
+use typenum::operator_aliases::{Prod, Mod};
+use typenum::type_operators::Same;
+use typenum::marker_traits::Unsigned;
 
-// TODO: rename to Vector?
-/// A fixed-size array.
+use arrayvec::ArrayVec;
+
+use std::ops::{Deref, DerefMut, Add, Sub, Mul, Rem, Index, IndexMut};
+use std::marker::PhantomData;
+
+/// A fixed-size vector.
 ///
 /// ```rust
 /// # use static_matrix::typenum::consts::*;
-/// # use static_matrix::Array;
+/// # use static_matrix::Vector;
 ///
-/// let arr = Array::<i32, U5>::new([1, 2, 3, 4, 5]);
+/// let arr = Vector::<i32, U5>::new([1, 2, 3, 4, 5]);
 /// assert_eq!(*arr, [1, 2, 3, 4, 5]);
 /// ```
 #[derive(Debug)]
-pub struct Array<T, N: ArrayLen<T>>(pub N::Array);
+pub struct Vector<T, N: ArrayLen<T>>(pub N::Array);
 
-impl<T, N: ArrayLen<T>> Array<T, N> {
+impl<T, N: ArrayLen<T>> Vector<T, N> {
     #[inline]
     pub fn new(array: N::Array) -> Self {
-        Array(array)
+        Vector(array)
     }
 
     #[inline]
     pub fn into_inner(self) -> N::Array {
         self.0
     }
+
+    #[inline]
+    pub fn into_chunks<I>(self) -> VectorChunks<T, N, I>
+        where
+            N: Rem<I>,
+            Mod<N, I>: Same<U0>
+    {
+        VectorChunks::new(ArrayVec::from(self.0))
+    }
 }
 
-impl<T, N> Clone for Array<T, N>
+impl<T, N> Clone for Vector<T, N>
     where
         N: ArrayLen<T>,
         N::Array: Clone
 {
+    #[inline]
     fn clone(&self) -> Self {
-        Array(self.0.clone())
+        Vector(self.0.clone())
     }
 }
 
-impl<T, N> Copy for Array<T, N>
+impl<T, N> Copy for Vector<T, N>
     where
         N: ArrayLen<T>,
         N::Array: Copy
 {
 }
 
-impl<T, N> Default for Array<T, N>
+impl<T, N> Default for Vector<T, N>
     where
         N: ArrayLen<T>,
         N::Array: Default
 {
     #[inline]
     fn default() -> Self {
-        Array::<T, N>(Default::default())
+        Vector(Default::default())
     }
 }
 
-impl<T, N> Deref for Array<T, N>
+impl<T, N> Deref for Vector<T, N>
     where
         N: ArrayLen<T>
 {
@@ -72,12 +86,61 @@ impl<T, N> Deref for Array<T, N>
     }
 }
 
-impl<T, N> DerefMut for Array<T, N>
+impl<T, N> DerefMut for Vector<T, N>
     where N: ArrayLen<T>
 {
     #[inline]
     fn deref_mut(&mut self) -> &mut N::Array {
         &mut self.0
+    }
+}
+
+pub struct VectorChunks<T, N, I> where N: ArrayLen<T> {
+    array: ArrayVec<N::Array>,
+    _i: PhantomData<I>,
+}
+
+impl<T, N, I> VectorChunks<T, N, I> where N: ArrayLen<T> {
+    fn new(a: ArrayVec<N::Array>) -> Self {
+        VectorChunks {
+            array: a,
+            _i: PhantomData,
+        }
+    }
+}
+
+impl<T, N, I> Iterator for VectorChunks<T, N, I>
+    where
+        N: ArrayLen<T> + Rem<I>,
+        I: Unsigned + ArrayLen<T>,
+        Mod<N, I>: Same<U0>,
+{
+    type Item = Vector<T, I>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // FIXME
+
+        if self.array.is_empty() {
+            None
+        } else {
+            let mut res = ArrayVec::new();
+
+            for _ in 0..I::to_usize()  {
+                res.push(self.array.pop().unwrap_or_else(|| unreachable!()));
+            }
+            debug_assert!(res.is_full());
+
+            Some(Vector(res.into_inner().unwrap_or_else(|_| unreachable!())))
+        }
+    }
+}
+
+#[test]
+fn test_vector_chunks() {
+    let arr: Vector<i32, U6> = Vector::default();
+    for a in arr.into_chunks::<U2>() {
+        let a: [i32; 2] = a.into_inner();
+        assert_eq!(a.len(), 2);
     }
 }
 
@@ -131,8 +194,8 @@ fn test_array() {
     use std::ops::Sub;
     // rustc bug (broken MIR) https://github.com/rust-lang/rust/issues/28828
     // use typenum::Diff;
-    // let a: Array<i32, Diff<U8, U3>> = Default::default();
-    let a: Array<i32, <U8 as Sub<U3>>::Output> = Default::default();
+    // let a: Vector<i32, Diff<U8, U3>> = Default::default();
+    let a: Vector<i32, <U8 as Sub<U3>>::Output> = Default::default();
     assert_eq!(a.len(), 5);
     let _: [i32; 5] = a.0;
 }
@@ -150,7 +213,7 @@ fn test_array() {
 /// assert_eq!(m.cols().nth(1), Some([0, 1, 2]));
 /// assert_eq!(m + m, Matrix::from_array([[0, 0, 0], [0, 2, 0], [0, 4, 0]]));
 /// ```
-pub struct Matrix<T, Row, Col>(Array<T, Prod<Row, Col>>)
+pub struct Matrix<T, Row, Col>(Vector<T, Prod<Row, Col>>)
     where
         Row: Mul<Col>,
         <Row as Mul<Col>>::Output: ArrayLen<T>;
@@ -161,14 +224,14 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         <Row as Mul<Col>>::Output: ArrayLen<T>
 {
     #[inline]
-    pub fn new(arr: Array<T, Prod<Row, Col>>) -> Self {
+    pub fn new(arr: Vector<T, Prod<Row, Col>>) -> Self {
         Matrix(arr)
     }
 
     pub fn from_inner(arr: <<Row as Mul<Col>>::Output as ArrayLen<T>>::Array)
         -> Matrix<T, Row, Col>
     {
-        Matrix::new(Array::new(arr))
+        Matrix::new(Vector::new(arr))
     }
 }
 
@@ -199,7 +262,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
             arr.extend(ArrayVec::from(row));
         }
         debug_assert!(arr.is_full());
-        Matrix::new(Array::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
+        Matrix::new(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
     }
 }
 
