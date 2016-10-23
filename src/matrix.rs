@@ -85,7 +85,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         <Row as Mul<Col>>::Output: ArrayLen<T>
 {
     #[inline]
-    pub fn dim() -> (usize, usize) {
+    pub fn dim(&self) -> (usize, usize) {
         (Row::to_usize(), Col::to_usize())
     }
 }
@@ -629,6 +629,7 @@ fn test_matrix_rows_cols_iter() {
     m[(1,1)] = 2;
     m[(2,2)] = 3;
     m[(0,2)] = 4;
+    assert_eq!(m.dim(), (3, 3));
 
     let mut rows = m.rows_ref();
 
