@@ -546,7 +546,7 @@ impl<T, Row, Col> IndexMut<(usize, usize)> for Matrix<T, Row, Col>
 }
 
 macro_rules! impl_matrix_arith {
-    (T U : $op_trait:ident, $op_fn: ident) => {
+    (T T : $op_trait:ident, $op_fn: ident) => {
         impl<T, Row, Col> $op_trait<Matrix<T, Row, Col>> for Matrix<T, Row, Col>
             where
                 T: $op_trait,
@@ -570,11 +570,95 @@ macro_rules! impl_matrix_arith {
                 Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
             }
         }
-    }
+    };
+
+    (&T T : $op_trait:ident, $op_fn: ident) => {
+        impl<'a, T, Row, Col> $op_trait<Matrix<T, Row, Col>> for &'a Matrix<T, Row, Col>
+            where
+                &'a T: $op_trait<T>,
+                Row: Mul<Col> + Unsigned,
+                Col: Unsigned,
+                <Row as Mul<Col>>::Output: ArrayLen<T>,
+                <Row as Mul<Col>>::Output: ArrayLen<<&'a T as $op_trait<T>>::Output>
+        {
+            type Output = Matrix<<&'a T as $op_trait<T>>::Output, Row, Col>;
+
+            fn $op_fn(self, rhs: Matrix<T, Row, Col>) -> Self::Output {
+                let xs = self.0.as_slice();
+                let ys: ArrayVec<_> = rhs.0.into_inner().into();
+
+                let mut res = ArrayVec::new();
+
+                for (x, y) in xs.into_iter().zip(ys) {
+                    res.push($op_trait::$op_fn(x, y));
+                }
+
+                Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+            }
+        }
+    };
+
+    (T &T : $op_trait:ident, $op_fn: ident) => {
+        impl<'a, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for Matrix<T, Row, Col>
+            where
+                T: $op_trait<&'a T>,
+                Row: Mul<Col> + Unsigned,
+                Col: Unsigned,
+                <Row as Mul<Col>>::Output: ArrayLen<T>,
+                <Row as Mul<Col>>::Output: ArrayLen<<T as $op_trait<&'a T>>::Output>
+        {
+            type Output = Matrix<<T as $op_trait<&'a T>>::Output, Row, Col>;
+
+            fn $op_fn(self, rhs: &'a Matrix<T, Row, Col>) -> Self::Output {
+                let xs: ArrayVec<_> = self.0.into_inner().into();
+                let ys = rhs.0.as_slice();
+
+                let mut res = ArrayVec::new();
+
+                for (x, y) in xs.into_iter().zip(ys) {
+                    res.push($op_trait::$op_fn(x, y));
+                }
+
+                Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+            }
+        }
+    };
+
+    (&T &T : $op_trait:ident, $op_fn: ident) => {
+        impl<'a, 'b, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for &'b Matrix<T, Row, Col>
+            where
+                &'b T: $op_trait<&'a T>,
+                Row: Mul<Col> + Unsigned,
+                Col: Unsigned,
+                <Row as Mul<Col>>::Output: ArrayLen<T>,
+                <Row as Mul<Col>>::Output: ArrayLen<<&'b T as $op_trait<&'a T>>::Output>
+        {
+            type Output = Matrix<<&'b T as $op_trait<&'a T>>::Output, Row, Col>;
+
+            fn $op_fn(self, rhs: &'a Matrix<T, Row, Col>) -> Self::Output {
+                let xs = self.0.as_slice();
+                let ys = rhs.0.as_slice();
+
+                let mut res = ArrayVec::new();
+
+                for (x, y) in xs.into_iter().zip(ys) {
+                    res.push($op_trait::$op_fn(x, y));
+                }
+
+                Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+            }
+        }
+    };
 }
 
-impl_matrix_arith!(T U: Add, add);
-impl_matrix_arith!(T U: Sub, sub);
+impl_matrix_arith!(T T: Add, add);
+impl_matrix_arith!(T T: Sub, sub);
+impl_matrix_arith!(&T T: Add, add);
+impl_matrix_arith!(&T T: Sub, sub);
+impl_matrix_arith!(T &T: Add, add);
+impl_matrix_arith!(T &T: Sub, sub);
+impl_matrix_arith!(&T &T: Add, add);
+impl_matrix_arith!(&T &T: Sub, sub);
 
 /*
 impl<T, U, Row, Col> Mul<U> for Matrix<T, Row, Col>
@@ -657,16 +741,31 @@ fn test_matrix_add_sub_mul() {
     let mut m1 = Matrix::<i32, U2, U2>::default();
     m1[(1,1)] = 4;
     m1[(0,0)] = 1;
+
     let m2 = Matrix::new([[0, 0], [0, 1]]);
     assert_eq!(m2[(1, 1)], 1);
+
     let m3 = m1 + m2;
+    assert_eq!(m3, Matrix::new([[1, 0], [0, 5]]));
     assert_eq!(m3[(0,0)], 1);
     assert_eq!(m3[(1,1)], 5);
+
+    assert_eq!(&m1 + m2, Matrix::new([[1, 0], [0, 5]]));
+    assert_eq!(m1 + &m2, Matrix::new([[1, 0], [0, 5]]));
+    assert_eq!(&m1 + &m2, Matrix::new([[1, 0], [0, 5]]));
+
     let m4 = m1 - m2;
+    assert_eq!(m4, Matrix::new([[1, 0], [0, 3]]));
     assert_eq!(m4[(0,0)], 1);
     assert_eq!(m4[(1,1)], 3);
+
+    assert_eq!(&m1 - m2, Matrix::new([[1, 0], [0, 3]]));
+    assert_eq!(m1 - &m2, Matrix::new([[1, 0], [0, 3]]));
+    assert_eq!(&m1 - &m2, Matrix::new([[1, 0], [0, 3]]));
+
     let id = Matrix::new([[1, 0], [0, 1]]);
     assert_eq!(m1, m1 * id);
+
     let m5 = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     assert_eq!(m4 * m5 * 2, Matrix::new([[2, 4], [18, 24]]));
 }
