@@ -12,7 +12,7 @@ use arrayvec::ArrayVec;
 use std::ops::{Deref, DerefMut, Add, Sub, Mul, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 
-/// A fixed-size vector.
+/// A fixed-size vector whose elements are allocated on the stack.
 ///
 /// ```rust
 /// # use static_matrix::typenum::consts::*;
@@ -22,7 +22,7 @@ use std::marker::PhantomData;
 /// assert_eq!(*arr, [1, 2, 3, 4, 5]);
 /// ```
 #[derive(Debug)]
-pub struct Vector<T, N: ArrayLen<T>>(pub N::Array);
+pub struct Vector<T, N: ArrayLen<T>>(N::Array);
 
 impl<T, N: ArrayLen<T>> Vector<T, N> {
     #[inline]
@@ -33,6 +33,16 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     #[inline]
     pub fn into_inner(self) -> N::Array {
         self.0
+    }
+
+    #[inline]
+    pub fn as_slice(&self) -> &[T] {
+        self.0.as_ref()
+    }
+
+    #[inline]
+    pub fn as_slice_mut(&mut self) -> &mut [T] {
+        self.0.as_mut()
     }
 
     #[inline]
@@ -95,15 +105,166 @@ impl<T, N> DerefMut for Vector<T, N>
     }
 }
 
+impl<T, N> AsRef<[T]> for Vector<T, N>
+    where N: ArrayLen<T>
+{
+    #[inline]
+    fn as_ref(&self) -> &[T] {
+        self.as_slice()
+    }
+}
+
+impl<T, N> AsMut<[T]> for Vector<T, N>
+    where N: ArrayLen<T>
+{
+    #[inline]
+    fn as_mut(&mut self) -> &mut [T] {
+        self.as_slice_mut()
+    }
+}
+
+impl<T, U, N> PartialEq<Vector<U, N>> for Vector<T, N>
+    where
+        T: PartialEq<U>,
+        N: ArrayLen<T> + ArrayLen<U>,
+{
+    #[inline]
+    fn eq(&self, other: &Vector<U, N>) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl<T, N> Eq for Vector<T, N>
+    where
+        T: PartialEq,
+        N: ArrayLen<T>,
+{
+}
+
+macro_rules! impl_vector_arith {
+    (T T : $op_trait:ident, $op_fn:ident) => {
+        impl<T, U, N> $op_trait<Vector<U, N>> for Vector<T, N>
+            where
+                N: ArrayLen<T>,
+                T: $op_trait<U>,
+                N: ArrayLen<T> + ArrayLen<U> + ArrayLen<<T as $op_trait<U>>::Output>,
+        {
+            type Output = Vector<<T as $op_trait<U>>::Output, N>;
+
+            fn $op_fn(self, other: Vector<U, N>) -> Self::Output {
+                let mut res = ArrayVec::new();
+
+                for (a, b) in ArrayVec::from(self.into_inner()).into_iter().zip(ArrayVec::from(other.into_inner())) {
+                    res.push($op_trait::$op_fn(a, b));
+                }
+
+                debug_assert!(res.is_full());
+                Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!()))
+            }
+        }
+    };
+
+    (T &T : $op_trait:ident, $op_fn:ident) => {
+        impl<'a, T, U, N> $op_trait<&'a Vector<U, N>> for Vector<T, N>
+            where
+                N: ArrayLen<T>,
+                T: $op_trait<&'a U>,
+                N: ArrayLen<T> + ArrayLen<U> + ArrayLen<<T as $op_trait<&'a U>>::Output>,
+        {
+            type Output = Vector<<T as $op_trait<&'a U>>::Output, N>;
+
+            fn $op_fn(self, other: &'a Vector<U, N>) -> Self::Output {
+                let mut res = ArrayVec::new();
+
+                for (a, b) in ArrayVec::from(self.into_inner()).into_iter().zip(other.as_slice()) {
+                    res.push($op_trait::$op_fn(a, b));
+                }
+
+                debug_assert!(res.is_full());
+                Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!()))
+            }
+        }
+    };
+
+    (&T T : $op_trait:ident, $op_fn:ident) => {
+        impl<'a, T, U, N> $op_trait<Vector<U, N>> for &'a Vector<T, N>
+            where
+                N: ArrayLen<T>,
+                &'a T: $op_trait<U>,
+                N: ArrayLen<T> + ArrayLen<U> + ArrayLen<<&'a T as $op_trait<U>>::Output>,
+        {
+            type Output = Vector<<&'a T as $op_trait<U>>::Output, N>;
+
+            fn $op_fn(self, other: Vector<U, N>) -> Self::Output {
+                let mut res = ArrayVec::new();
+
+                for (a, b) in self.as_slice().into_iter().zip(ArrayVec::from(other.into_inner())) {
+                    res.push($op_trait::$op_fn(a, b));
+                }
+
+                debug_assert!(res.is_full());
+                Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!()))
+            }
+        }
+    };
+
+    (&T &T : $op_trait:ident, $op_fn:ident) => {
+        impl<'a, 'b, T, U, N> $op_trait<&'a Vector<U, N>> for &'b Vector<T, N>
+            where
+                N: ArrayLen<T>,
+                &'b T: $op_trait<&'a U>,
+                N: ArrayLen<T> + ArrayLen<U> + ArrayLen<<&'b T as $op_trait<&'a U>>::Output>,
+        {
+            type Output = Vector<<&'b T as $op_trait<&'a U>>::Output, N>;
+
+            fn $op_fn(self, other: &'a Vector<U, N>) -> Self::Output {
+                let mut res = ArrayVec::new();
+
+                for (a, b) in self.as_slice().into_iter().zip(other.as_slice()) {
+                    res.push($op_trait::$op_fn(a, b));
+                }
+
+                debug_assert!(res.is_full());
+                Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!()))
+            }
+        }
+    };
+}
+
+impl_vector_arith!(T T: Add, add);
+impl_vector_arith!(T T: Sub, sub);
+impl_vector_arith!(T &T: Add, add);
+impl_vector_arith!(T &T: Sub, sub);
+impl_vector_arith!(&T T: Add, add);
+impl_vector_arith!(&T T: Sub, sub);
+impl_vector_arith!(&T &T: Add, add);
+impl_vector_arith!(&T &T: Sub, sub);
+
+#[test]
+fn test_vector_arith() {
+    let a = Vector::<i32, U3>::new([1, 2, 3]);
+    let b = Vector::new([4, 5, 6]);
+    let a_plus_b = Vector::new([5, 7, 9]);
+    let a_minus_b = Vector::new([-3, -3, -3]);
+    assert_eq!(a + b, a_plus_b);
+    assert_eq!(&a + b, a_plus_b);
+    assert_eq!(a + &b, a_plus_b);
+    assert_eq!(&a + &b, a_plus_b);
+    assert_eq!(a - b, a_minus_b);
+    assert_eq!(&a - b, a_minus_b);
+    assert_eq!(a - &b, a_minus_b);
+    assert_eq!(&a - &b, a_minus_b);
+}
+
 pub struct VectorChunks<T, N, I> where N: ArrayLen<T> {
-    array: ArrayVec<N::Array>,
+    it: ::arrayvec::IntoIter<N::Array>,
     _i: PhantomData<I>,
 }
 
 impl<T, N, I> VectorChunks<T, N, I> where N: ArrayLen<T> {
     fn new(a: ArrayVec<N::Array>) -> Self {
         VectorChunks {
-            array: a,
+            it: a.into_iter(),
             _i: PhantomData,
         }
     }
@@ -118,30 +279,39 @@ impl<T, N, I> Iterator for VectorChunks<T, N, I>
     type Item = Vector<T, I>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // FIXME
-
-        if self.array.is_empty() {
+        if self.it.size_hint().1 == Some(0) {
             None
         } else {
             let mut res = ArrayVec::new();
-
-            for _ in 0..I::to_usize()  {
-                res.push(self.array.pop().unwrap_or_else(|| unreachable!()));
-            }
+            res.extend((&mut self.it).take(I::to_usize()));
             debug_assert!(res.is_full());
-
             Some(Vector(res.into_inner().unwrap_or_else(|_| unreachable!())))
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.it.len() / I::to_usize();
+        (len, Some(len))
+    }
+}
+
+impl<T, N, I> ExactSizeIterator for VectorChunks<T, N, I>
+    where
+        N: ArrayLen<T> + Rem<I>,
+        I: Unsigned + ArrayLen<T>,
+        Mod<N, I>: Same<U0>,
+{
 }
 
 #[test]
 fn test_vector_chunks() {
-    let arr: Vector<i32, U6> = Vector::default();
-    for a in arr.into_chunks::<U2>() {
-        let a: [i32; 2] = a.into_inner();
-        assert_eq!(a.len(), 2);
-    }
+    let arr: Vector<i32, U6> = Vector::new([1, 2, 3, 4, 5, 6]);
+    let mut it = arr.into_chunks::<U2>();
+    let a: [i32; 2] = it.next().unwrap().into_inner();
+    assert_eq!(a, [1, 2]);
+    let a: [i32; 2] = it.next().unwrap().into_inner();
+    assert_eq!(a, [3, 4]);
+    assert_eq!(it.len(), 1);
 }
 
 pub trait ArrayLen<T> {
@@ -200,18 +370,18 @@ fn test_array() {
     let _: [i32; 5] = a.0;
 }
 
-/// A fixed-size matrix.
+/// A fixed-size matrix whose elements are allocated on the stack.
 ///
 /// ```rust
 /// # use static_matrix::typenum::consts::*;
 /// # use static_matrix::Matrix;
-/// let mut m = Matrix::<i32, U3, U3>::from_array([[0, 0, 0], [0, 1, 0], [0, 2, 0]]);
+/// let mut m = Matrix::<i32, U3, U3>::new([[0, 0, 0], [0, 1, 0], [0, 2, 0]]);
 ///
 /// assert_eq!(m[(1,1)], 1);
 /// assert_eq!(m[(1,2)], 2);
 /// assert_eq!(m.rows().nth(1), Some([0, 1, 0]));
 /// assert_eq!(m.cols().nth(1), Some([0, 1, 2]));
-/// assert_eq!(m + m, Matrix::from_array([[0, 0, 0], [0, 2, 0], [0, 4, 0]]));
+/// assert_eq!(m + m, Matrix::new([[0, 0, 0], [0, 2, 0], [0, 4, 0]]));
 /// ```
 pub struct Matrix<T, Row, Col>(Vector<T, Prod<Row, Col>>)
     where
@@ -220,18 +390,53 @@ pub struct Matrix<T, Row, Col>(Vector<T, Prod<Row, Col>>)
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
-        Row: Mul<Col>,
+        Row: Mul<Col> + Unsigned + ArrayLen<<Col as ArrayLen<T>>::Array>,
+        Col: Unsigned + ArrayLen<T>,
         <Row as Mul<Col>>::Output: ArrayLen<T>
 {
     #[inline]
-    pub fn new(arr: Vector<T, Prod<Row, Col>>) -> Self {
-        Matrix(arr)
-    }
-
-    pub fn from_inner(arr: <<Row as Mul<Col>>::Output as ArrayLen<T>>::Array)
+    pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
         -> Matrix<T, Row, Col>
     {
-        Matrix::new(Vector::new(arr))
+        let mut arr = ArrayVec::new();
+        for row in ArrayVec::from(rows) {
+            arr.extend(ArrayVec::from(row));
+        }
+        debug_assert!(arr.is_full());
+        Matrix::from_flat_array(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+    }
+}
+
+impl<T, Row, Col> From<Vector<T, Prod<Row, Col>>> for Matrix<T, Row, Col>
+    where
+        Row: Mul<Col>,
+        Prod<Row, Col>: ArrayLen<T>,
+{
+    #[inline]
+    fn from(arr: Vector<T, Prod<Row, Col>>) -> Self {
+        Matrix(arr)
+    }
+}
+
+impl<T, Row, Col> Matrix<T, Row, Col>
+    where
+        Row: Mul<Col>,
+        <Row as Mul<Col>>::Output: ArrayLen<T>
+{
+    /// Creates a matrix from its representation in a flat array.
+    ///
+    /// ```rust
+    /// # use static_matrix::Matrix;
+    /// # use static_matrix::typenum::consts::*;
+    ///
+    /// let mat = Matrix::<i32, U2, U2>::from_flat_array([1, 2, 3, 4]);
+    /// assert_eq!(mat, Matrix::new([[1, 2], [3, 4]]));
+    /// ```
+    #[inline]
+    pub fn from_flat_array(arr: <<Row as Mul<Col>>::Output as ArrayLen<T>>::Array)
+        -> Matrix<T, Row, Col>
+    {
+        Matrix::from(Vector::new(arr))
     }
 }
 
@@ -246,26 +451,6 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         (Row::to_usize(), Col::to_usize())
     }
 }
-
-impl<T, Row, Col> Matrix<T, Row, Col>
-    where
-        Row: Mul<Col> + Unsigned + ArrayLen<<Col as ArrayLen<T>>::Array>,
-        Col: Unsigned + ArrayLen<T>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
-{
-    #[inline]
-    pub fn from_array(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
-        -> Matrix<T, Row, Col>
-    {
-        let mut arr = ArrayVec::new();
-        for row in ArrayVec::from(rows) {
-            arr.extend(ArrayVec::from(row));
-        }
-        debug_assert!(arr.is_full());
-        Matrix::new(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
-    }
-}
-
 
 impl<T, Row, Col> Default for Matrix<T, Row, Col>
     where
@@ -360,55 +545,36 @@ impl<T, Row, Col> IndexMut<(usize, usize)> for Matrix<T, Row, Col>
     }
 }
 
-impl<T, U, Row, Col> Add<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
-    where
-        T: Add<U>,
-        Row: Mul<Col> + Unsigned,
-        Col: Unsigned,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
-        <Row as Mul<Col>>::Output: ArrayLen<U>,
-        <Row as Mul<Col>>::Output: ArrayLen<<T as Add<U>>::Output>
-{
-    type Output = Matrix<<T as Add<U>>::Output, Row, Col>;
+macro_rules! impl_matrix_arith {
+    (T U : $op_trait:ident, $op_fn: ident) => {
+        impl<T, Row, Col> $op_trait<Matrix<T, Row, Col>> for Matrix<T, Row, Col>
+            where
+                T: $op_trait,
+                Row: Mul<Col> + Unsigned,
+                Col: Unsigned,
+                <Row as Mul<Col>>::Output: ArrayLen<T>,
+                <Row as Mul<Col>>::Output: ArrayLen<<T as $op_trait>::Output>
+        {
+            type Output = Matrix<<T as $op_trait>::Output, Row, Col>;
 
-    fn add(self, rhs: Matrix<U, Row, Col>) -> Self::Output {
-        let xs: ArrayVec<_> = self.0.into_inner().into();
-        let ys: ArrayVec<_> = rhs.0.into_inner().into();
+            fn $op_fn(self, rhs: Matrix<T, Row, Col>) -> Self::Output {
+                let xs: ArrayVec<_> = self.0.into_inner().into();
+                let ys: ArrayVec<_> = rhs.0.into_inner().into();
 
-        let mut res = ArrayVec::new();
+                let mut res = ArrayVec::new();
 
-        for (x, y) in xs.into_iter().zip(ys) {
-            res.push(x + y);
+                for (x, y) in xs.into_iter().zip(ys) {
+                    res.push($op_trait::$op_fn(x, y));
+                }
+
+                Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+            }
         }
-
-        Matrix::from_inner(res.into_inner().unwrap_or_else(|_| unreachable!()))
     }
 }
 
-impl<T, U, Row, Col> Sub<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
-    where
-        T: Sub<U>,
-        Row: Mul<Col> + Unsigned,
-        Col: Unsigned,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
-        <Row as Mul<Col>>::Output: ArrayLen<U>,
-        <Row as Mul<Col>>::Output: ArrayLen<<T as Sub<U>>::Output>
-{
-    type Output = Matrix<<T as Sub<U>>::Output, Row, Col>;
-
-    fn sub(self, rhs: Matrix<U, Row, Col>) -> Self::Output {
-        let xs: ArrayVec<_> = self.0.into_inner().into();
-        let ys: ArrayVec<_> = rhs.0.into_inner().into();
-
-        let mut res = ArrayVec::new();
-
-        for (x, y) in xs.into_iter().zip(ys) {
-            res.push(x - y);
-        }
-
-        Matrix::from_inner(res.into_inner().unwrap_or_else(|_| unreachable!()))
-    }
-}
+impl_matrix_arith!(T U: Add, add);
+impl_matrix_arith!(T U: Sub, sub);
 
 /*
 impl<T, U, Row, Col> Mul<U> for Matrix<T, Row, Col>
@@ -428,7 +594,7 @@ impl<T, U, Row, Col> Mul<U> for Matrix<T, Row, Col>
         }
 
         debug_assert!(arr.is_full());
-        Matrix::from_inner(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+        Matrix::from_flat_array(arr.into_inner().unwrap_or_else(|_| unreachable!()))
     }
 }
 */
@@ -450,7 +616,7 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
         }
 
         debug_assert!(arr.is_full());
-        Matrix::from_inner(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+        Matrix::from_flat_array(arr.into_inner().unwrap_or_else(|_| unreachable!()))
     }
 }
 
@@ -482,7 +648,7 @@ impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
 
         debug_assert!(res.is_full());
 
-        Matrix::from_inner(res.into_inner().unwrap_or_else(|_| unreachable!()))
+        Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
     }
 }
 
@@ -491,7 +657,7 @@ fn test_matrix_add_sub_mul() {
     let mut m1 = Matrix::<i32, U2, U2>::default();
     m1[(1,1)] = 4;
     m1[(0,0)] = 1;
-    let m2 = Matrix::from_array([[0, 0], [0, 1]]);
+    let m2 = Matrix::new([[0, 0], [0, 1]]);
     assert_eq!(m2[(1, 1)], 1);
     let m3 = m1 + m2;
     assert_eq!(m3[(0,0)], 1);
@@ -499,11 +665,36 @@ fn test_matrix_add_sub_mul() {
     let m4 = m1 - m2;
     assert_eq!(m4[(0,0)], 1);
     assert_eq!(m4[(1,1)], 3);
-    let id = Matrix::from_array([[1, 0], [0, 1]]);
+    let id = Matrix::new([[1, 0], [0, 1]]);
     assert_eq!(m1, m1 * id);
-    let m5 = Matrix::<i32, U2, U2>::from_array([[1, 2], [3, 4]]);
-    assert_eq!(m4 * m5 * 2, Matrix::from_array([[2, 4], [18, 24]]));
+    let m5 = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    assert_eq!(m4 * m5 * 2, Matrix::new([[2, 4], [18, 24]]));
 }
+
+/*
+impl<T, N> Matrix<T, N, N>
+    where
+        T: Add,
+        N: Mul<Col>,
+        <N as Mul<N>>::Output: ArrayLen<T>
+{
+    fn determinant(&self) -> T {
+    }
+}
+
+impl<T, N> Matrix<T, N, N>
+    where
+        T: One + Div,
+        N: Mul<Col>,
+        <N as Mul<N>>::Output: ArrayLen<T>
+{
+    pub fn inverse(&self) -> Option<Matrix<T, N, N>> {
+        let inv_det = T::one() / self.determinant();
+    }
+}
+*/
+
+// TODO: `into_rows` and `into_cols`
 
 impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
     where
