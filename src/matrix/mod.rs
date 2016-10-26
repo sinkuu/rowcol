@@ -1,10 +1,10 @@
-#[allow(unused_imports)] use typenum::consts::*;
-use typenum::operator_aliases::Prod;
-use typenum::marker_traits::Unsigned;
+use typenum::{self, Prod, Same};
+#[cfg(test)] use typenum::consts::*;
 
 use arrayvec::ArrayVec;
 
 use std::ops::{Add, Sub, Mul, Index, IndexMut};
+use std::marker::PhantomData;
 
 use vector::{Vector, ArrayLen};
 
@@ -12,25 +12,25 @@ use vector::{Vector, ArrayLen};
 ///
 /// ```rust
 /// # use static_matrix::typenum::consts::*;
-/// # use static_matrix::Matrix;
+/// # use static_matrix::{Matrix, Vector};
 /// let mut m = Matrix::<i32, U3, U3>::new([[0, 0, 0], [0, 1, 0], [0, 2, 0]]);
 ///
 /// assert_eq!(m[(1,1)], 1);
-/// assert_eq!(m[(1,2)], 2);
-/// assert_eq!(m.rows().nth(1), Some([0, 1, 0]));
-/// assert_eq!(m.cols().nth(1), Some([0, 1, 2]));
+/// assert_eq!(m[(2,1)], 2);
+/// assert_eq!(m.rows().nth(1), Some(Vector::new([0, 1, 0])));
+/// assert_eq!(m.cols().nth(1), Some(Vector::new([0, 1, 2])));
 /// assert_eq!(m + m, Matrix::new([[0, 0, 0], [0, 2, 0], [0, 4, 0]]));
 /// ```
 pub struct Matrix<T, Row, Col>(Vector<T, Prod<Row, Col>>)
     where
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>;
+        Prod<Row, Col>: ArrayLen<T>;
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + Unsigned + ArrayLen<<Col as ArrayLen<T>>::Array>,
-        Col: Unsigned + ArrayLen<T>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        Row: Mul<Col> + typenum::Unsigned + ArrayLen<<Col as ArrayLen<T>>::Array>,
+        Col: typenum::Unsigned + ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T>
 {
     #[inline]
     pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
@@ -59,7 +59,7 @@ impl<T, Row, Col> From<Vector<T, Prod<Row, Col>>> for Matrix<T, Row, Col>
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        Prod<Row, Col>: ArrayLen<T>
 {
     /// Creates a matrix from its representation in a flat array.
     ///
@@ -71,7 +71,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     /// assert_eq!(mat, Matrix::new([[1, 2], [3, 4]]));
     /// ```
     #[inline]
-    pub fn from_flat_array(arr: <<Row as Mul<Col>>::Output as ArrayLen<T>>::Array)
+    pub fn from_flat_array(arr: <Prod<Row, Col> as ArrayLen<T>>::Array)
         -> Matrix<T, Row, Col>
     {
         Matrix::from(Vector::new(arr))
@@ -80,9 +80,9 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + Unsigned,
-        Col: Unsigned,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        Row: Mul<Col> + typenum::Unsigned,
+        Col: typenum::Unsigned,
+        Prod<Row, Col>: ArrayLen<T>
 {
     #[inline]
     pub fn dim(&self) -> (usize, usize) {
@@ -93,7 +93,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 impl<T, Row, Col> Default for Matrix<T, Row, Col>
     where
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T>,
         <Prod<Row, Col> as ArrayLen<T>>::Array: Default
 {
     #[inline]
@@ -105,7 +105,7 @@ impl<T, Row, Col> Default for Matrix<T, Row, Col>
 impl<T, Row, Col> Clone for Matrix<T, Row, Col>
     where
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T>,
         <Prod<Row, Col> as ArrayLen<T>>::Array: Clone
 {
     fn clone(&self) -> Self {
@@ -116,7 +116,7 @@ impl<T, Row, Col> Clone for Matrix<T, Row, Col>
 impl<T, Row, Col> Copy for Matrix<T, Row, Col>
     where
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T>,
         <Prod<Row, Col> as ArrayLen<T>>::Array: Copy
 {
 }
@@ -124,18 +124,18 @@ impl<T, Row, Col> Copy for Matrix<T, Row, Col>
 impl<T, Row, Col> PartialEq for Matrix<T, Row, Col>
     where
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T>,
         T: PartialEq,
 {
     fn eq(&self, rhs: &Matrix<T, Row, Col>) -> bool {
-        (self.0).as_slice() == (rhs.0).as_slice()
+        self.0 == rhs.0
     }
 }
 
 impl<T, Row, Col> Eq for Matrix<T, Row, Col>
     where
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T>,
         T: PartialEq,
 {
 }
@@ -143,7 +143,7 @@ impl<T, Row, Col> Eq for Matrix<T, Row, Col>
 impl<T, Row, Col> ::std::fmt::Debug for Matrix<T, Row, Col>
     where
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T>,
         <Prod<Row, Col> as ArrayLen<T>>::Array: ::std::fmt::Debug
 {
     fn fmt(&self, fmt: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
@@ -154,9 +154,9 @@ impl<T, Row, Col> ::std::fmt::Debug for Matrix<T, Row, Col>
 
 impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + Unsigned,
-        Col: Unsigned,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        Row: Mul<Col> + typenum::Unsigned,
+        Col: typenum::Unsigned,
+        Prod<Row, Col>: ArrayLen<T>
 {
     type Output = T;
 
@@ -165,22 +165,56 @@ impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
         assert!(i < Col::to_usize());
         assert!(j < Row::to_usize());
 
-        &self.0.as_ref()[i + j * Col::to_usize()]
+        &self.0.as_ref()[i * Col::to_usize() + j]
+    }
+}
+
+impl<T, Row, Col, IRow, ICol> Index<(PhantomData<IRow>, PhantomData<ICol>)> for Matrix<T, Row, Col>
+    where
+        Row: Mul<Col> + typenum::Unsigned,
+        Col: typenum::Unsigned,
+        IRow: typenum::Unsigned + typenum::Cmp<Row>,
+        ICol: typenum::Unsigned + typenum::Cmp<Col>,
+        typenum::Compare<IRow, Row>: Same<typenum::Less>,
+        typenum::Compare<ICol, Col>: Same<typenum::Less>,
+        Prod<Row, Col>: ArrayLen<T>
+{
+    type Output = T;
+
+    #[inline]
+    fn index(&self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &T {
+        &self.0.as_ref()[IRow::to_usize() * Col::to_usize() + ICol::to_usize()]
     }
 }
 
 impl<T, Row, Col> IndexMut<(usize, usize)> for Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + Unsigned,
-        Col: Unsigned,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        Row: Mul<Col> + typenum::Unsigned,
+        Col: typenum::Unsigned,
+        Prod<Row, Col>: ArrayLen<T>
 {
     #[inline]
     fn index_mut(&mut self, (i, j): (usize, usize)) -> &mut T {
         assert!(i < Col::to_usize());
         assert!(j < Row::to_usize());
 
-        &mut self.0.as_mut()[i + j * Col::to_usize()]
+        &mut self.0.as_mut()[i * Col::to_usize() + j]
+    }
+}
+
+impl<T, Row, Col, IRow, ICol> IndexMut<(PhantomData<IRow>, PhantomData<ICol>)> for Matrix<T, Row, Col>
+    where
+        Row: Mul<Col> + typenum::Unsigned,
+        Col: typenum::Unsigned,
+        IRow: typenum::Unsigned + typenum::Cmp<Row>,
+        ICol: typenum::Unsigned + typenum::Cmp<Col>,
+        typenum::Compare<IRow, Row>: Same<::typenum::Less>,
+        typenum::Compare<ICol, Col>: Same<::typenum::Less>,
+        Prod<Row, Col>: ArrayLen<T>
+{
+    #[inline]
+    fn index_mut(&mut self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &mut T {
+        &mut self.0.as_mut()[IRow::to_usize() * Col::to_usize() + ICol::to_usize()]
     }
 }
 
@@ -189,10 +223,10 @@ macro_rules! impl_matrix_arith {
         impl<T, Row, Col> $op_trait<Matrix<T, Row, Col>> for Matrix<T, Row, Col>
             where
                 T: $op_trait,
-                Row: Mul<Col> + Unsigned,
-                Col: Unsigned,
-                <Row as Mul<Col>>::Output: ArrayLen<T>,
-                <Row as Mul<Col>>::Output: ArrayLen<<T as $op_trait>::Output>
+                Row: Mul<Col> + typenum::Unsigned,
+                Col: typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<T>,
+                Prod<Row, Col>: ArrayLen<<T as $op_trait>::Output>
         {
             type Output = Matrix<<T as $op_trait>::Output, Row, Col>;
 
@@ -215,10 +249,10 @@ macro_rules! impl_matrix_arith {
         impl<'a, T, Row, Col> $op_trait<Matrix<T, Row, Col>> for &'a Matrix<T, Row, Col>
             where
                 &'a T: $op_trait<T>,
-                Row: Mul<Col> + Unsigned,
-                Col: Unsigned,
-                <Row as Mul<Col>>::Output: ArrayLen<T>,
-                <Row as Mul<Col>>::Output: ArrayLen<<&'a T as $op_trait<T>>::Output>
+                Row: Mul<Col> + typenum::Unsigned,
+                Col: typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<T>,
+                Prod<Row, Col>: ArrayLen<<&'a T as $op_trait<T>>::Output>
         {
             type Output = Matrix<<&'a T as $op_trait<T>>::Output, Row, Col>;
 
@@ -241,10 +275,10 @@ macro_rules! impl_matrix_arith {
         impl<'a, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for Matrix<T, Row, Col>
             where
                 T: $op_trait<&'a T>,
-                Row: Mul<Col> + Unsigned,
-                Col: Unsigned,
-                <Row as Mul<Col>>::Output: ArrayLen<T>,
-                <Row as Mul<Col>>::Output: ArrayLen<<T as $op_trait<&'a T>>::Output>
+                Row: Mul<Col> + typenum::Unsigned,
+                Col: typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<T>,
+                Prod<Row, Col>: ArrayLen<<T as $op_trait<&'a T>>::Output>
         {
             type Output = Matrix<<T as $op_trait<&'a T>>::Output, Row, Col>;
 
@@ -267,10 +301,10 @@ macro_rules! impl_matrix_arith {
         impl<'a, 'b, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for &'b Matrix<T, Row, Col>
             where
                 &'b T: $op_trait<&'a T>,
-                Row: Mul<Col> + Unsigned,
-                Col: Unsigned,
-                <Row as Mul<Col>>::Output: ArrayLen<T>,
-                <Row as Mul<Col>>::Output: ArrayLen<<&'b T as $op_trait<&'a T>>::Output>
+                Row: Mul<Col> + typenum::Unsigned,
+                Col: typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<T>,
+                Prod<Row, Col>: ArrayLen<<&'b T as $op_trait<&'a T>>::Output>
         {
             type Output = Matrix<<&'b T as $op_trait<&'a T>>::Output, Row, Col>;
 
@@ -305,7 +339,7 @@ impl<T, U, Row, Col> Mul<U> for Matrix<T, Row, Col>
         T: Mul<U>,
         U: Clone,
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T>,
 {
     type Output = Matrix<<T as Mul<U>>::Output, Row, Col>;
 
@@ -326,8 +360,8 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
     where
         T: Mul + Clone,
         Row: Mul<Col>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>,
-        <Row as Mul<Col>>::Output: ArrayLen<<T as Mul>::Output>,
+        Prod<Row, Col>: ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<<T as Mul>::Output>,
 {
     type Output = Matrix<<T as Mul>::Output, Row, Col>;
 
@@ -346,24 +380,24 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
 impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     where
         T: Mul<T, Output = T> + Clone + ::std::iter::Sum,
-        N: Mul<RCol> + Unsigned + ArrayLen<T>,
+        N: Mul<RCol> + typenum::Unsigned + ArrayLen<T> + for<'a> ArrayLen<&'a T>,
         <N as ArrayLen<T>>::Array: Clone,
-        RCol: Unsigned,
-        LRow: Unsigned + Mul<N> + Mul<RCol>,
-        <LRow as Mul<N>>::Output: ArrayLen<T>,
-        <N as Mul<RCol>>::Output: ArrayLen<T>,
-        <LRow as Mul<RCol>>::Output: ArrayLen<<T as Mul>::Output>,
-        <LRow as Mul<RCol>>::Output: ArrayLen<T>
+        RCol: typenum::Unsigned,
+        LRow: typenum::Unsigned + Mul<N> + Mul<RCol>,
+        Prod<LRow, N>: ArrayLen<T>,
+        Prod<N, RCol>: ArrayLen<T>,
+        Prod<LRow, RCol>: ArrayLen<Prod<T, T>>,
+        Prod<LRow, RCol>: ArrayLen<T>
 {
-    type Output = Matrix<<T as Mul>::Output, LRow, RCol>;
+    type Output = Matrix<Prod<T, T>, LRow, RCol>;
 
     fn mul(self, rhs: Matrix<T, N, RCol>) -> Self::Output {
         let mut res = ArrayVec::new();
 
-        for lrow in self.rows() {
+        for lrow in self.rows_ref() {
             for rcol in rhs.cols() {
-                let s = ArrayVec::from(lrow.clone()).into_iter().zip(ArrayVec::from(rcol))
-                    .map(|(a, b)| a * b)
+                let s = lrow.iter().cloned().zip(rcol.into_iter())
+                    .map(|(a, b)| a.clone() * b)
                     .sum();
                 res.push(s);
             }
@@ -406,20 +440,12 @@ fn test_matrix_add_sub_mul() {
     assert_eq!(m1, m1 * id);
 
     let m5 = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    assert_eq!(m5[(1,0)], 3);
     assert_eq!(m4 * m5 * 2, Matrix::new([[2, 4], [18, 24]]));
 }
 
-/*
-impl<T, N> Matrix<T, N, N>
-    where
-        T: Add,
-        N: Mul<Col>,
-        <N as Mul<N>>::Output: ArrayLen<T>
-{
-    fn determinant(&self) -> T {
-    }
-}
 
+/*
 impl<T, N> Matrix<T, N, N>
     where
         T: One + Div,
@@ -436,51 +462,51 @@ impl<T, N> Matrix<T, N, N>
 
 impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + Unsigned,
-        Col: Unsigned + ArrayLen<&'a T>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        Row: Mul<Col> + typenum::Unsigned,
+        Col: typenum::Unsigned + ArrayLen<&'a T>,
+        Prod<Row, Col>: ArrayLen<T>
 {
     #[inline]
-    pub fn rows_ref(&'a self) -> RowsIter<'a, T, Row, Col> {
-        RowsIter(&*self.0, 0)
+    pub fn rows_ref(&'a self) -> RowsRefIter<'a, T, Row, Col> {
+        RowsRefIter(&*self.0, 0)
     }
 }
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
         T: Clone,
-        Row: Mul<Col> + Unsigned,
-        Col: Unsigned + ArrayLen<T>,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        Row: Mul<Col> + typenum::Unsigned,
+        Col: typenum::Unsigned + ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T>
 {
     #[inline]
-    pub fn rows(&self) -> RowsClonedIter<T, Row, Col> {
-        RowsClonedIter(&*self.0, 0)
+    pub fn rows(&self) -> RowsIter<T, Row, Col> {
+        RowsIter(&*self.0, 0)
     }
 }
 
 impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + Unsigned + ArrayLen<&'a T>,
-        Col: Unsigned,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        Row: Mul<Col> + typenum::Unsigned + ArrayLen<&'a T>,
+        Col: typenum::Unsigned,
+        Prod<Row, Col>: ArrayLen<T>
 {
     #[inline]
-    pub fn cols_ref(&'a self) -> ColsIter<'a, T, Row, Col> {
-        ColsIter(&*self.0, 0)
+    pub fn cols_ref(&'a self) -> ColsRefIter<'a, T, Row, Col> {
+        ColsRefIter(&*self.0, 0)
     }
 }
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
         T: Clone,
-        Row: Mul<Col> + Unsigned + ArrayLen<T>,
-        Col: Unsigned,
-        <Row as Mul<Col>>::Output: ArrayLen<T>
+        Row: Mul<Col> + typenum::Unsigned + ArrayLen<T>,
+        Col: typenum::Unsigned,
+        Prod<Row, Col>: ArrayLen<T>
 {
     #[inline]
-    pub fn cols(&self) -> ColsClonedIter<T, Row, Col> {
-        ColsClonedIter(&*self.0, 0)
+    pub fn cols(&self) -> ColsIter<T, Row, Col> {
+        ColsIter(&*self.0, 0)
     }
 }
 
@@ -490,17 +516,17 @@ macro_rules! decl_row_iter {
             (&'a <Prod<Row, Col> as ArrayLen<T>>::Array, usize)
             where
                 Row: Mul<Col>,
-                <Row as Mul<Col>>::Output: ArrayLen<T> + 'a;
+                Prod<Row, Col>: ArrayLen<T> + 'a;
 
         impl<'a, T: 'a, Row, Col> Iterator
             for $name<'a, T, Row, Col>
             where
                 $item: Clone,
-                Row: Mul<Col> + Unsigned,
-                Col: Unsigned + ArrayLen<$item>,
-                <Row as Mul<Col>>::Output: ArrayLen<T> + 'a,
+                Row: Mul<Col> + typenum::Unsigned,
+                Col: typenum::Unsigned + ArrayLen<$item>,
+                Prod<Row, Col>: ArrayLen<T> + 'a,
         {
-            type Item = <Col as ArrayLen<$item>>::Array;
+            type Item = Vector<$item, Col>;
 
             fn next(&mut self) -> Option<Self::Item> {
                 if self.1 < Row::to_usize() {
@@ -515,7 +541,7 @@ macro_rules! decl_row_iter {
                     }
                     debug_assert!(arr.is_full());
 
-                    Some(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+                    Some(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
                 } else {
                     None
                 }
@@ -543,9 +569,9 @@ macro_rules! decl_row_iter {
         impl<'a, T: 'a, Row, Col> ExactSizeIterator for $name<'a, T, Row, Col>
             where
                 $item: Clone,
-                Row: Mul<Col> + Unsigned,
-                Col: Unsigned + ArrayLen<$item>,
-                <Row as Mul<Col>>::Output: ArrayLen<T> + 'a
+                Row: Mul<Col> + typenum::Unsigned,
+                Col: typenum::Unsigned + ArrayLen<$item>,
+                Prod<Row, Col>: ArrayLen<T> + 'a
             {}
     }
 }
@@ -556,17 +582,17 @@ macro_rules! decl_col_iter {
             (&'a <Prod<Row, Col> as ArrayLen<T>>::Array, usize)
             where
                 Row: Mul<Col>,
-                <Row as Mul<Col>>::Output: ArrayLen<T> + 'a;
+                Prod<Row, Col>: ArrayLen<T> + 'a;
 
         impl<'a, T: 'a, Row, Col> Iterator
             for $name<'a, T, Row, Col>
             where
                 $item: Clone,
-                Row: Mul<Col> + Unsigned + ArrayLen<$item>,
-                Col: Unsigned,
-                <Row as Mul<Col>>::Output: ArrayLen<T> + 'a
+                Row: Mul<Col> + typenum::Unsigned + ArrayLen<$item>,
+                Col: typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<T> + 'a
         {
-            type Item = <Row as ArrayLen<$item>>::Array;
+            type Item = Vector<$item, Row>;
 
             fn next(&mut self) -> Option<Self::Item> {
                 if self.1 < Col::to_usize() {
@@ -581,7 +607,7 @@ macro_rules! decl_col_iter {
                     }
                     debug_assert!(arr.is_full());
 
-                    Some(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+                    Some(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
                 } else {
                     None
                 }
@@ -609,17 +635,17 @@ macro_rules! decl_col_iter {
         impl<'a, T: 'a, Row, Col> ExactSizeIterator for $name<'a, T, Row, Col>
             where
                 $item: Clone,
-                Row: Mul<Col> + Unsigned + ArrayLen<$item>,
-                Col: Unsigned,
-                <Row as Mul<Col>>::Output: ArrayLen<T> + 'a
+                Row: Mul<Col> + typenum::Unsigned + ArrayLen<$item>,
+                Col: typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<T> + 'a
             {}
     };
 }
 
-decl_row_iter!(RowsIter, &'a T);
-decl_row_iter!(RowsClonedIter, T);
-decl_col_iter!(ColsIter, &'a T);
-decl_col_iter!(ColsClonedIter, T);
+decl_row_iter!(RowsRefIter, &'a T);
+decl_row_iter!(RowsIter, T);
+decl_col_iter!(ColsRefIter, &'a T);
+decl_col_iter!(ColsIter, T);
 
 
 #[test]
@@ -634,33 +660,33 @@ fn test_matrix_rows_cols_iter() {
     let mut rows = m.rows_ref();
 
     assert_eq!(rows.len(), 3);
-    assert!(rows.next().unwrap().iter().eq(&[&1, &0, &0]));
+    assert!(rows.next().unwrap().iter().eq(&[&1, &0, &4]));
     assert!(rows.next().unwrap().iter().eq(&[&0, &2, &0]));
-    assert!(rows.next().unwrap().iter().eq(&[&4, &0, &3]));
+    assert!(rows.next().unwrap().iter().eq(&[&0, &0, &3]));
     assert_eq!(rows.next(), None);
 
     let mut cols = m.cols_ref();
 
     assert_eq!(cols.len(), 3);
-    assert!(cols.next().unwrap().iter().eq(&[&1, &0, &4]));
+    assert!(cols.next().unwrap().iter().eq(&[&1, &0, &0]));
     assert!(cols.next().unwrap().iter().eq(&[&0, &2, &0]));
-    assert!(cols.next().unwrap().iter().eq(&[&0, &0, &3]));
+    assert!(cols.next().unwrap().iter().eq(&[&4, &0, &3]));
     assert_eq!(cols.next(), None);
 
     let mut rows = m.rows();
 
     assert_eq!(rows.len(), 3);
-    assert!(rows.next().unwrap().iter().eq(&[1, 0, 0]));
+    assert!(rows.next().unwrap().iter().eq(&[1, 0, 4]));
     assert!(rows.next().unwrap().iter().eq(&[0, 2, 0]));
-    assert!(rows.next().unwrap().iter().eq(&[4, 0, 3]));
+    assert!(rows.next().unwrap().iter().eq(&[0, 0, 3]));
     assert_eq!(rows.next(), None);
 
     let mut cols = m.cols();
 
     assert_eq!(cols.len(), 3);
-    assert!(cols.next().unwrap().iter().eq(&[1, 0, 4]));
+    assert!(cols.next().unwrap().iter().eq(&[1, 0, 0]));
     assert!(cols.next().unwrap().iter().eq(&[0, 2, 0]));
-    assert!(cols.next().unwrap().iter().eq(&[0, 0, 3]));
+    assert!(cols.next().unwrap().iter().eq(&[4, 0, 3]));
     assert_eq!(cols.next(), None);
 }
 

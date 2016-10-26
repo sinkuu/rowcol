@@ -42,6 +42,11 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     }
 
     #[inline]
+    pub fn iter(&self) -> Iter<T> {
+        Iter(self.as_slice().iter())
+    }
+
+    #[inline]
     pub fn into_chunks<I>(self) -> VectorChunks<T, N, I>
         where
             N: Rem<I>,
@@ -250,6 +255,37 @@ fn test_vector_arith() {
     assert_eq!(&a - b, a_minus_b);
     assert_eq!(a - &b, a_minus_b);
     assert_eq!(&a - &b, a_minus_b);
+}
+
+pub struct Iter<'a, T: 'a>(::std::slice::Iter<'a, T>);
+
+impl<'a, T: 'a> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+impl<T, N> IntoIterator for Vector<T, N> where N: ArrayLen<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T,  N>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter(ArrayVec::from(self.into_inner()).into_iter())
+    }
+}
+
+pub struct IntoIter<T, N>(arrayvec::IntoIter<N::Array>) where N: ArrayLen<T>;
+
+impl<T, N> Iterator for IntoIter<T, N> where N: ArrayLen<T> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
 }
 
 pub struct VectorChunks<T, N, I> where N: ArrayLen<T> {
