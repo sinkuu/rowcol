@@ -11,8 +11,8 @@ use vector::{Vector, ArrayLen};
 /// A fixed-size matrix whose elements are allocated on the stack.
 ///
 /// ```rust
-/// # use static_matrix::typenum::consts::*;
-/// # use static_matrix::{Matrix, Vector};
+/// # use rowcol::typenum::consts::*;
+/// # use rowcol::{Matrix, Vector};
 /// let mut m = Matrix::<i32, U3, U3>::new([[0, 0, 0], [0, 1, 0], [0, 2, 0]]);
 ///
 /// assert_eq!(m[(1,1)], 1);
@@ -64,8 +64,8 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     /// Creates a matrix from its representation in a flat array.
     ///
     /// ```rust
-    /// # use static_matrix::Matrix;
-    /// # use static_matrix::typenum::consts::*;
+    /// # use rowcol::Matrix;
+    /// # use rowcol::typenum::consts::*;
     ///
     /// let mat = Matrix::<i32, U2, U2>::from_flat_array([1, 2, 3, 4]);
     /// assert_eq!(mat, Matrix::new([[1, 2], [3, 4]]));
@@ -183,7 +183,9 @@ impl<T, Row, Col, IRow, ICol> Index<(PhantomData<IRow>, PhantomData<ICol>)> for 
 
     #[inline]
     fn index(&self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &T {
-        &self.0.as_ref()[IRow::to_usize() * Col::to_usize() + ICol::to_usize()]
+        unsafe {
+            &self.0.as_ref().get_unchecked(IRow::to_usize() * Col::to_usize() + ICol::to_usize())
+        }
     }
 }
 

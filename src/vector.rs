@@ -11,8 +11,8 @@ use std::marker::PhantomData;
 /// A fixed-size vector whose elements are allocated on the stack.
 ///
 /// ```rust
-/// # use static_matrix::typenum::consts::*;
-/// # use static_matrix::Vector;
+/// # use rowcol::typenum::consts::*;
+/// # use rowcol::Vector;
 ///
 /// let arr = Vector::<i32, U5>::new([1, 2, 3, 4, 5]);
 /// assert_eq!(*arr, [1, 2, 3, 4, 5]);
