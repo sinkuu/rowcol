@@ -77,7 +77,8 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
     type Item = T;
 
     fn determinant(&self) -> T {
-        (0 .. <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize())
+        let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
+        (0 .. n)
             .map(|i| self[(i, 0)].clone() * self.cofactor(i, 0))
             .fold(T::zero(), Add::add)
     }
