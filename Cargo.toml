@@ -10,5 +10,12 @@ keywords = ["matrix", "array"]
 
 [dependencies]
 typenum = "1.4.0"
-arrayvec = "0.3.20"
 num = "0.1.36"
+
+[dependencies.arrayvec]
+version = "0.3.20"
+default-features = false
+
+[features]
+default = ["std"]
+std = ["arrayvec/std"]

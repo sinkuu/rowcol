@@ -9,6 +9,10 @@
 //! [`Vector`]: ./vector/struct.Vector.html
 //! [`Matrix`]: ./vector/struct.Matrix.html
 
+#![cfg_attr(not(feature = "std"), no_std)]
+#[cfg(not(feature = "std"))]
+extern crate core as std;
+
 pub extern crate typenum;
 extern crate arrayvec;
 extern crate num;
@@ -19,3 +23,4 @@ pub mod matrix;
 
 pub use vector::Vector;
 pub use matrix::Matrix;
+
