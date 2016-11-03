@@ -10,49 +10,48 @@ use arrayvec::ArrayVec;
 
 use std::ops::{Add, Mul, Sub};
 
-
-/// Internal trait used for determinant implementation dispatch.
-pub trait DeterminantImpl {
+pub trait Determinant {
     type Item;
 
-    fn determinant_impl(&self) -> Self::Item;
+    /// Computes determinant of the matrix.
+    fn determinant(&self) -> Self::Item;
 }
 
-/// Internal trait used for cofactor implementation dispatch.
-pub trait CofactorImpl {
+pub trait Cofactor {
     type Item;
 
-    fn cofactor_impl(&self, i: usize, j: usize) -> Self::Item;
+    /// Computes cofactor of the matrix.
+    fn cofactor(&self, i: usize, j: usize) -> Self::Item;
 }
 
-impl<T> DeterminantImpl for Matrix<T, U1, U1> where T: Clone {
+impl<T> Determinant for Matrix<T, U1, U1> where T: Clone {
     type Item = T;
 
     #[inline]
-    fn determinant_impl(&self) -> T {
+    fn determinant(&self) -> T {
         self[(0, 0)].clone()
     }
 }
 
-impl<T> DeterminantImpl for Matrix<T, U2, U2>
+impl<T> Determinant for Matrix<T, U2, U2>
     where T: num::Signed + Clone
 {
     type Item = T;
 
     #[inline]
-    fn determinant_impl(&self) -> T {
+    fn determinant(&self) -> T {
         self[(0, 0)].clone() * self[(1,1)].clone()
             - self[(1, 0)].clone() * self[(0, 1)].clone()
     }
 }
 
-impl<T> DeterminantImpl for Matrix<T, U3, U3>
+impl<T> Determinant for Matrix<T, U3, U3>
     where T: num::Signed + Clone
 {
     type Item = T;
 
     #[inline]
-    fn determinant_impl(&self) -> T {
+    fn determinant(&self) -> T {
         self[(0, 0)].clone() * self[(1, 1)].clone() * self[(2, 2)].clone() +
             self[(0, 1)].clone() * self[(1, 2)].clone() * self[(2, 0)].clone() +
             self[(0, 2)].clone() * self[(1, 0)].clone() * self[(2, 1)].clone() -
@@ -62,9 +61,9 @@ impl<T> DeterminantImpl for Matrix<T, U3, U3>
     }
 }
 
-// DeterminantImpl for Matrix<T, N, N> where N > U3
+// Determinant for Matrix<T, N, N> where N > U3
 // Note: U3 = UInt<UInt<UTerm, B1>, B1>
-impl<T, U, Ba, Bb, Bc> DeterminantImpl for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>
+impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>
     where
         U: typenum::Unsigned,
         Ba: typenum::Bit,
@@ -73,23 +72,23 @@ impl<T, U, Ba, Bb, Bc> DeterminantImpl for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>,
         T: num::Signed + Clone,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>: Mul + typenum::Unsigned + Sub<U1> + for<'a> ArrayLen<&'a T>,
         Prod<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: ArrayLen<T>,
-        Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: CofactorImpl<Item = T>,
+        Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: Cofactor<Item = T>,
 {
     type Item = T;
 
-    fn determinant_impl(&self) -> T {
+    fn determinant(&self) -> T {
         (0 .. <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize())
-            .map(|i| self[(i, 0)].clone() * self.cofactor_impl(i, 0))
+            .map(|i| self[(i, 0)].clone() * self.cofactor(i, 0))
             .fold(T::zero(), Add::add)
     }
 }
 
-impl<T> CofactorImpl for Matrix<T, U2, U2> where T: num::Signed + Clone
+impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
 {
     type Item = T;
 
     #[inline]
-    fn cofactor_impl(&self, i: usize, j: usize) -> T {
+    fn cofactor(&self, i: usize, j: usize) -> T {
         assert!(i < 2);
         assert!(j < 2);
 
@@ -99,14 +98,14 @@ impl<T> CofactorImpl for Matrix<T, U2, U2> where T: num::Signed + Clone
     }
 }
 
-impl<T> CofactorImpl for Matrix<T, U3, U3>
+impl<T> Cofactor for Matrix<T, U3, U3>
     where
         U3: Mul + typenum::Unsigned + for<'a> ArrayLen<&'a T>,
         T: num::Signed + Clone,
 {
     type Item = T;
 
-    fn cofactor_impl(&self, i: usize, j: usize) -> T {
+    fn cofactor(&self, i: usize, j: usize) -> T {
         assert!(i < 3 && j < 3);
 
         let mut arr = ArrayVec::new();
@@ -128,12 +127,12 @@ impl<T> CofactorImpl for Matrix<T, U3, U3>
             Matrix::<T, U2, U2>::from_flat_array(arr
                                                  .into_inner()
                                                  .unwrap_or_else(|_| unreachable!()))
-                .determinant_impl()
+                .determinant()
     }
 }
 
-// CofactorImpl for Matrix<T, N, N> where N > U3
-impl<T, U, Ba, Bb, Bc> CofactorImpl for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>
+// Cofactor for Matrix<T, N, N> where N > U3
+impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>
     where
         U: typenum::Unsigned,
         Ba: typenum::Bit,
@@ -148,11 +147,11 @@ impl<T, U, Ba, Bb, Bc> CofactorImpl for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc
         <Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1> as Mul>::Output: ArrayLen<T>,
         Matrix<T,
                Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>,
-               Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>: DeterminantImpl<Item = T>,
+               Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>: Determinant<Item = T>,
 {
     type Item = T;
 
-    fn cofactor_impl(&self, i: usize, j: usize) -> T {
+    fn cofactor(&self, i: usize, j: usize) -> T {
         let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
         assert!(i < n && j < n);
 
@@ -177,23 +176,23 @@ impl<T, U, Ba, Bb, Bc> CofactorImpl for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc
                      Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>::from_flat_array(arr
                                                                                  .into_inner()
                                                                                  .unwrap_or_else(|_| unreachable!()))
-            .determinant_impl()
+            .determinant()
     }
 }
 
 #[test]
 fn test_det_cof_impl() {
     let m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
-    assert_eq!(m.cofactor_impl(0, 0), 4);
-    assert_eq!(m.determinant_impl(), -2);
+    assert_eq!(m.cofactor(0, 0), 4);
+    assert_eq!(m.determinant(), -2);
     let m = Matrix::<i32, U3, U3>::new([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
-    assert_eq!(m.determinant_impl(), 0);
-    assert_eq!(m.cofactor_impl(1, 1), -12);
+    assert_eq!(m.determinant(), 0);
+    assert_eq!(m.cofactor(1, 1), -12);
     let m = Matrix::<i32, U4, U4>::new([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]]);
-    assert_eq!(m.determinant_impl(), 0);
+    assert_eq!(m.determinant(), 0);
 
     // TODO:
     // let m = m.into_flat_iter().map(|a| BigInt::from(a)).collect::<Matrix::<_, U3, U3>>();
-    // assert_eq!(m.determinant_impl(), 0);
+    // assert_eq!(m.determinant(), 0);
 }
 
