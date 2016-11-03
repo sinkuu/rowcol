@@ -1,13 +1,10 @@
 mod ops_impl;
 pub use self::ops_impl::{Cofactor, Determinant};
 
-use typenum::{self, Prod, Same, Diff};
-use typenum::uint::UInt;
-use typenum::consts::*;
+use typenum::{self, Prod, Same};
+#[cfg(test)] use typenum::consts::*;
 
 use arrayvec::ArrayVec;
-
-use num;
 
 use std::ops::{Add, Sub, Mul, Index, IndexMut};
 use std::marker::PhantomData;
