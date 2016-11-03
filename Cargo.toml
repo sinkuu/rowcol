@@ -1,7 +1,12 @@
 [package]
 name = "rowcol"
+description = "Fixed-size vectors/matrices allocated on the stack"
 version = "0.1.0"
 authors = ["sinkuu <sinkuupump@gmail.com>"]
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/rowcol/"
+repository = "https://github.com/sinkuu/rowcol"
+keywords = ["matrix", "array"]
 
 [dependencies]
 typenum = "1.4.0"
