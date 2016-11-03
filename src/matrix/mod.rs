@@ -6,6 +6,8 @@ use typenum::{self, Prod, Same};
 
 use arrayvec::ArrayVec;
 
+use num;
+
 use std::ops::{Add, Sub, Mul, Index, IndexMut};
 use std::marker::PhantomData;
 
@@ -109,7 +111,7 @@ impl<T, Row, Col> Clone for Matrix<T, Row, Col>
     where
         Row: Mul<Col>,
         Prod<Row, Col>: ArrayLen<T>,
-        <Prod<Row, Col> as ArrayLen<T>>::Array: Clone
+        Vector<T, Prod<Row, Col>>: Clone
 {
     fn clone(&self) -> Self {
         Matrix(self.0.clone())
@@ -120,6 +122,7 @@ impl<T, Row, Col> Copy for Matrix<T, Row, Col>
     where
         Row: Mul<Col>,
         Prod<Row, Col>: ArrayLen<T>,
+        T: Copy,
         <Prod<Row, Col> as ArrayLen<T>>::Array: Copy
 {
 }
@@ -384,9 +387,8 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
 
 impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     where
-        T: Mul<T, Output = T> + Clone + ::std::iter::Sum,
+        T: num::Zero + Add<T, Output = T> + Mul<T, Output = T> + Clone,
         N: Mul<RCol> + typenum::Unsigned + ArrayLen<T> + for<'a> ArrayLen<&'a T>,
-        <N as ArrayLen<T>>::Array: Clone,
         RCol: typenum::Unsigned,
         LRow: typenum::Unsigned + Mul<N> + Mul<RCol>,
         Prod<LRow, N>: ArrayLen<T>,
@@ -403,7 +405,7 @@ impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
             for rcol in rhs.cols() {
                 let s = lrow.iter().cloned().zip(rcol.into_iter())
                     .map(|(a, b)| a.clone() * b)
-                    .sum();
+                    .fold(T::zero(), Add::add);
                 res.push(s);
             }
         }
@@ -447,6 +449,9 @@ fn test_matrix_add_sub_mul() {
     let m5 = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     assert_eq!(m5[(1,0)], 3);
     assert_eq!(m4 * m5 * 2, Matrix::new([[2, 4], [18, 24]]));
+
+    let mb = Matrix::<num::BigInt, U2, U2>::new([[1.into(), 2.into()], [3.into(), 4.into()]]);
+    assert_eq!(mb.clone() * mb, Matrix::new([[7.into(), 10.into()], [15.into(), 22.into()]]));
 }
 
 

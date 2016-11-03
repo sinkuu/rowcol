@@ -58,19 +58,21 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
 
 impl<T, N> Clone for Vector<T, N>
     where
-        N: ArrayLen<T>,
-        N::Array: Clone
+        T: Clone,
+        N: ArrayLen<T>
 {
     #[inline]
     fn clone(&self) -> Self {
-        Vector(self.0.clone())
+        let new: ArrayVec<_> = self.iter().cloned().collect();
+        Vector(new.into_inner().unwrap_or_else(|_| unreachable!()))
     }
 }
 
 impl<T, N> Copy for Vector<T, N>
     where
-        N: ArrayLen<T>,
-        N::Array: Copy
+        T: Copy,
+        N::Array: Copy,
+        N: ArrayLen<T>
 {
 }
 
