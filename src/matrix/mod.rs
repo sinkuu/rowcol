@@ -1,93 +1,71 @@
 mod ops_impl;
 pub use self::ops_impl::{Cofactor, Determinant};
 
-use typenum::{self, Prod, Same};
-#[cfg(test)] use typenum::consts::*;
+use typenum::{self, Prod, Same, Mod};
+use typenum::consts::*;
 
 use arrayvec::ArrayVec;
 
 use num;
 
-use std::ops::{Add, Sub, Mul, Index, IndexMut};
+use std::ops::{Add, Sub, Mul, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 
 use vector::{Vector, ArrayLen};
 
-/// A fixed-size matrix whose elements are allocated on the stack.
-///
-/// ```rust
-/// # use rowcol::typenum::consts::*;
-/// # use rowcol::{Matrix, Vector};
-/// let mut m = Matrix::<i32, U3, U3>::new([[0, 0, 0], [0, 1, 0], [0, 2, 0]]);
-///
-/// assert_eq!(m[(1,1)], 1);
-/// assert_eq!(m[(2,1)], 2);
-/// assert_eq!(m.rows().nth(1), Some(Vector::new([0, 1, 0])));
-/// assert_eq!(m.cols().nth(1), Some(Vector::new([0, 1, 2])));
-/// assert_eq!(m + m, Matrix::new([[0, 0, 0], [0, 2, 0], [0, 4, 0]]));
-/// ```
-pub struct Matrix<T, Row, Col>(Vector<T, Prod<Row, Col>>)
+/// A fixed-size matrix allocated on the stack.
+pub struct Matrix<T, Row, Col>(Vector<Vector<T, Col>, Row>)
     where
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>;
+        Col: ArrayLen<T>,
+        Row: ArrayLen<Vector<T, Col>>;
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + typenum::Unsigned + ArrayLen<<Col as ArrayLen<T>>::Array>,
-        Col: typenum::Unsigned + ArrayLen<T>,
-        Prod<Row, Col>: ArrayLen<T>
+        Row: ArrayLen<<Col as ArrayLen<T>>::Array> + ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
 {
+    /// Creates a new matrix.
+    ///
+    /// ```rust
+    /// # use rowcol::typenum::consts::*;
+    /// # use rowcol::Matrix;
+    /// let mat = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    /// ```
     #[inline]
     pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
         -> Matrix<T, Row, Col>
     {
         let mut arr = ArrayVec::new();
-        for row in ArrayVec::from(rows) {
-            arr.extend(ArrayVec::from(row));
+        for row in Vector::<<Col as ArrayLen<T>>::Array, Row>::new(rows) {
+            arr.push(Vector::<T, Col>::new(row));
         }
         debug_assert!(arr.is_full());
-        Matrix::from_flat_array(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+        Matrix(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
     }
 }
 
 impl<T, Row, Col> From<Vector<T, Prod<Row, Col>>> for Matrix<T, Row, Col>
     where
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>,
+        Row: ArrayLen<Vector<T, Col>> + Mul<Col>,
+        Col: ArrayLen<T> + typenum::Unsigned,
+        Prod<Row, Col>: ArrayLen<T> + Rem<Col>,
+        Mod<Prod<Row, Col>, Col>: Same<U0>,
 {
     #[inline]
-    fn from(arr: Vector<T, Prod<Row, Col>>) -> Self {
-        Matrix(arr)
+    fn from(v: Vector<T, Prod<Row, Col>>) -> Self {
+        let mut res = ArrayVec::new();
+        for row in v.into_chunks::<Col>() {
+            res.push(row);
+        }
+        debug_assert!(res.is_full());
+        Matrix(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
     }
 }
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>
-{
-    /// Creates a matrix from its representation in a flat array.
-    ///
-    /// ```rust
-    /// # use rowcol::Matrix;
-    /// # use rowcol::typenum::consts::*;
-    ///
-    /// let mat = Matrix::<i32, U2, U2>::from_flat_array([1, 2, 3, 4]);
-    /// assert_eq!(mat, Matrix::new([[1, 2], [3, 4]]));
-    /// ```
-    #[inline]
-    pub fn from_flat_array(arr: <Prod<Row, Col> as ArrayLen<T>>::Array)
-        -> Matrix<T, Row, Col>
-    {
-        Matrix::from(Vector::new(arr))
-    }
-}
-
-impl<T, Row, Col> Matrix<T, Row, Col>
-    where
-        Row: Mul<Col> + typenum::Unsigned,
-        Col: typenum::Unsigned,
-        Prod<Row, Col>: ArrayLen<T>
+        Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
+        Col: typenum::Unsigned + ArrayLen<T>,
 {
     #[inline]
     pub fn dim(&self) -> (usize, usize) {
@@ -97,9 +75,10 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 
 impl<T, Row, Col> Default for Matrix<T, Row, Col>
     where
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>,
-        <Prod<Row, Col> as ArrayLen<T>>::Array: Default
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+        <Col as ArrayLen<T>>::Array: Default,
+        <Row as ArrayLen<Vector<T, Col>>>::Array: Default,
 {
     #[inline]
     fn default() -> Self {
@@ -109,28 +88,29 @@ impl<T, Row, Col> Default for Matrix<T, Row, Col>
 
 impl<T, Row, Col> Clone for Matrix<T, Row, Col>
     where
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>,
-        Vector<T, Prod<Row, Col>>: Clone
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+        Vector<Vector<T, Col>, Row>: Clone
 {
     fn clone(&self) -> Self {
-        Matrix(self.0.clone())
+        Matrix::<T, Row, Col>(self.0.clone())
     }
 }
 
 impl<T, Row, Col> Copy for Matrix<T, Row, Col>
     where
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
         T: Copy,
-        <Prod<Row, Col> as ArrayLen<T>>::Array: Copy
+        <Row as ArrayLen<Vector<T, Col>>>::Array: Copy,
+        <Col as ArrayLen<T>>::Array: Copy
 {
 }
 
 impl<T, Row, Col> PartialEq for Matrix<T, Row, Col>
     where
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
         T: PartialEq,
 {
     fn eq(&self, rhs: &Matrix<T, Row, Col>) -> bool {
@@ -140,89 +120,82 @@ impl<T, Row, Col> PartialEq for Matrix<T, Row, Col>
 
 impl<T, Row, Col> Eq for Matrix<T, Row, Col>
     where
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
         T: PartialEq,
 {
 }
 
 impl<T, Row, Col> ::std::fmt::Debug for Matrix<T, Row, Col>
     where
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>,
-        <Prod<Row, Col> as ArrayLen<T>>::Array: ::std::fmt::Debug
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
 {
     fn fmt(&self, fmt: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
-        use std::fmt::Pointer;
-        self.0.as_slice().fmt(fmt)
+        unimplemented!()
     }
 }
 
 impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + typenum::Unsigned,
-        Col: typenum::Unsigned,
-        Prod<Row, Col>: ArrayLen<T>
+        Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
+        Col: ArrayLen<T> + typenum::Unsigned,
 {
     type Output = T;
 
     #[inline]
     fn index(&self, (i, j): (usize, usize)) -> &T {
-        assert!(i < Col::to_usize());
-        assert!(j < Row::to_usize());
-
-        &self.0.as_ref()[i * Col::to_usize() + j]
+        &self.0.as_slice()[i].as_slice()[j]
     }
 }
 
 impl<T, Row, Col, IRow, ICol> Index<(PhantomData<IRow>, PhantomData<ICol>)> for Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + typenum::Unsigned,
-        Col: typenum::Unsigned,
+        Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
+        Col: ArrayLen<T> + typenum::Unsigned,
         IRow: typenum::Unsigned + typenum::Cmp<Row>,
         ICol: typenum::Unsigned + typenum::Cmp<Col>,
         typenum::Compare<IRow, Row>: Same<typenum::Less>,
         typenum::Compare<ICol, Col>: Same<typenum::Less>,
-        Prod<Row, Col>: ArrayLen<T>
 {
     type Output = T;
 
     #[inline]
     fn index(&self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &T {
         unsafe {
-            &self.0.as_ref().get_unchecked(IRow::to_usize() * Col::to_usize() + ICol::to_usize())
+            &self.0
+                .as_ref().get_unchecked(IRow::to_usize())
+                .as_ref().get_unchecked(ICol::to_usize())
         }
     }
 }
 
 impl<T, Row, Col> IndexMut<(usize, usize)> for Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + typenum::Unsigned,
-        Col: typenum::Unsigned,
-        Prod<Row, Col>: ArrayLen<T>
+        Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
+        Col: ArrayLen<T> + typenum::Unsigned,
 {
     #[inline]
     fn index_mut(&mut self, (i, j): (usize, usize)) -> &mut T {
-        assert!(i < Col::to_usize());
-        assert!(j < Row::to_usize());
-
-        &mut self.0.as_mut()[i * Col::to_usize() + j]
+        &mut self.0.as_slice_mut()[i].as_slice_mut()[j]
     }
 }
 
 impl<T, Row, Col, IRow, ICol> IndexMut<(PhantomData<IRow>, PhantomData<ICol>)> for Matrix<T, Row, Col>
     where
-        Row: Mul<Col> + typenum::Unsigned,
-        Col: typenum::Unsigned,
+        Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
+        Col: ArrayLen<T> + typenum::Unsigned,
         IRow: typenum::Unsigned + typenum::Cmp<Row>,
         ICol: typenum::Unsigned + typenum::Cmp<Col>,
-        typenum::Compare<IRow, Row>: Same<::typenum::Less>,
-        typenum::Compare<ICol, Col>: Same<::typenum::Less>,
-        Prod<Row, Col>: ArrayLen<T>
+        typenum::Compare<IRow, Row>: Same<typenum::Less>,
+        typenum::Compare<ICol, Col>: Same<typenum::Less>,
 {
     #[inline]
     fn index_mut(&mut self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &mut T {
-        &mut self.0.as_mut()[IRow::to_usize() * Col::to_usize() + ICol::to_usize()]
+        unsafe {
+            self.0.as_mut().get_unchecked_mut(IRow::to_usize())
+                .as_mut().get_unchecked_mut(ICol::to_usize())
+        }
     }
 }
 
@@ -231,24 +204,23 @@ macro_rules! impl_matrix_arith {
         impl<T, Row, Col> $op_trait<Matrix<T, Row, Col>> for Matrix<T, Row, Col>
             where
                 T: $op_trait,
-                Row: Mul<Col> + typenum::Unsigned,
-                Col: typenum::Unsigned,
-                Prod<Row, Col>: ArrayLen<T>,
-                Prod<Row, Col>: ArrayLen<<T as $op_trait>::Output>
+                Row: Mul<Col> + ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as $op_trait>::Output, Col>>,
+                Col: ArrayLen<T> + ArrayLen<<T as $op_trait>::Output> + typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<<T as $op_trait>::Output> + Rem<Col>,
+                Mod<Prod<Row, Col>, Col>: Same<U0>,
         {
             type Output = Matrix<<T as $op_trait>::Output, Row, Col>;
 
             fn $op_fn(self, rhs: Matrix<T, Row, Col>) -> Self::Output {
-                let xs: ArrayVec<_> = self.0.into_inner().into();
-                let ys: ArrayVec<_> = rhs.0.into_inner().into();
-
                 let mut res = ArrayVec::new();
 
-                for (x, y) in xs.into_iter().zip(ys) {
-                    res.push($op_trait::$op_fn(x, y));
+                for (xr, yr) in self.0.into_iter().zip(rhs.0.into_iter()) {
+                    for (x, y) in xr.into_iter().zip(yr) {
+                        res.push($op_trait::$op_fn(x, y));
+                    }
                 }
 
-                Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+                Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
             }
         }
     };
@@ -257,24 +229,24 @@ macro_rules! impl_matrix_arith {
         impl<'a, T, Row, Col> $op_trait<Matrix<T, Row, Col>> for &'a Matrix<T, Row, Col>
             where
                 &'a T: $op_trait<T>,
-                Row: Mul<Col> + typenum::Unsigned,
-                Col: typenum::Unsigned,
-                Prod<Row, Col>: ArrayLen<T>,
-                Prod<Row, Col>: ArrayLen<<&'a T as $op_trait<T>>::Output>
+                Row: Mul<Col> +
+                    ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<&'a T as $op_trait<T>>::Output, Col>>,
+                Col: ArrayLen<T> + ArrayLen<<&'a T as $op_trait<T>>::Output> + typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<<&'a T as $op_trait<T>>::Output> + Rem<Col>,
+                Mod<Prod<Row, Col>, Col>: Same<U0>,
         {
             type Output = Matrix<<&'a T as $op_trait<T>>::Output, Row, Col>;
 
             fn $op_fn(self, rhs: Matrix<T, Row, Col>) -> Self::Output {
-                let xs = self.0.as_slice();
-                let ys: ArrayVec<_> = rhs.0.into_inner().into();
-
                 let mut res = ArrayVec::new();
 
-                for (x, y) in xs.into_iter().zip(ys) {
-                    res.push($op_trait::$op_fn(x, y));
+                for (xr, yr) in self.0.as_slice().iter().zip(rhs.0.into_iter()) {
+                    for (x, y) in xr.iter().zip(yr.into_iter()) {
+                        res.push($op_trait::$op_fn(x, y));
+                    }
                 }
 
-                Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+                Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
             }
         }
     };
@@ -283,24 +255,24 @@ macro_rules! impl_matrix_arith {
         impl<'a, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for Matrix<T, Row, Col>
             where
                 T: $op_trait<&'a T>,
-                Row: Mul<Col> + typenum::Unsigned,
-                Col: typenum::Unsigned,
-                Prod<Row, Col>: ArrayLen<T>,
-                Prod<Row, Col>: ArrayLen<<T as $op_trait<&'a T>>::Output>
+                Row: Mul<Col> +
+                    ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as $op_trait<&'a T>>::Output, Col>>,
+                Col: ArrayLen<T> + ArrayLen<<T as $op_trait<&'a T>>::Output> + typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<<T as $op_trait<&'a T>>::Output> + Rem<Col>,
+                Mod<Prod<Row, Col>, Col>: Same<U0>,
         {
             type Output = Matrix<<T as $op_trait<&'a T>>::Output, Row, Col>;
 
             fn $op_fn(self, rhs: &'a Matrix<T, Row, Col>) -> Self::Output {
-                let xs: ArrayVec<_> = self.0.into_inner().into();
-                let ys = rhs.0.as_slice();
-
                 let mut res = ArrayVec::new();
 
-                for (x, y) in xs.into_iter().zip(ys) {
-                    res.push($op_trait::$op_fn(x, y));
+                for (xr, yr) in self.0.into_iter().zip(rhs.0.as_slice()) {
+                    for (x, y) in xr.into_iter().zip(yr.iter()) {
+                        res.push($op_trait::$op_fn(x, y));
+                    }
                 }
 
-                Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+                Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
             }
         }
     };
@@ -309,24 +281,24 @@ macro_rules! impl_matrix_arith {
         impl<'a, 'b, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for &'b Matrix<T, Row, Col>
             where
                 &'b T: $op_trait<&'a T>,
-                Row: Mul<Col> + typenum::Unsigned,
-                Col: typenum::Unsigned,
-                Prod<Row, Col>: ArrayLen<T>,
-                Prod<Row, Col>: ArrayLen<<&'b T as $op_trait<&'a T>>::Output>
+                Row: Mul<Col> + ArrayLen<Vector<T, Col>> +
+                     ArrayLen<Vector<<&'b T as $op_trait<&'a T>>::Output, Col>>,
+                Col: ArrayLen<T> + ArrayLen<<&'b T as $op_trait<&'a T>>::Output> + typenum::Unsigned,
+                Prod<Row, Col>: ArrayLen<<&'b T as $op_trait<&'a T>>::Output> + Rem<Col>,
+                Mod<Prod<Row, Col>, Col>: Same<U0>,
         {
             type Output = Matrix<<&'b T as $op_trait<&'a T>>::Output, Row, Col>;
 
             fn $op_fn(self, rhs: &'a Matrix<T, Row, Col>) -> Self::Output {
-                let xs = self.0.as_slice();
-                let ys = rhs.0.as_slice();
-
                 let mut res = ArrayVec::new();
 
-                for (x, y) in xs.into_iter().zip(ys) {
-                    res.push($op_trait::$op_fn(x, y));
+                for (xr, yr) in self.0.as_slice().iter().zip(rhs.0.as_slice()) {
+                    for (x, y) in xr.iter().zip(yr.iter()) {
+                        res.push($op_trait::$op_fn(x, y));
+                    }
                 }
 
-                Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+                Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
             }
         }
     };
@@ -367,41 +339,45 @@ impl<T, U, Row, Col> Mul<U> for Matrix<T, Row, Col>
 impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
     where
         T: Mul + Clone,
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>,
-        Prod<Row, Col>: ArrayLen<<T as Mul>::Output>,
+        Row: Mul<Col> + ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as Mul>::Output, Col>>,
+        Col: ArrayLen<T> + ArrayLen<<T as Mul>::Output> + typenum::Unsigned,
+        Prod<Row, Col>: ArrayLen<<T as Mul>::Output> + Rem<Col>,
+        Mod<Prod<Row, Col>, Col>: Same<U0>,
 {
     type Output = Matrix<<T as Mul>::Output, Row, Col>;
 
     fn mul(self, rhs: T) -> Self::Output {
         let mut arr = ArrayVec::new();
 
-        for x in ArrayVec::from(self.0.into_inner()) {
-            arr.push(x * rhs.clone());
+        for row in self.0.into_iter() {
+            for x in row.into_iter() {
+                arr.push(x * rhs.clone());
+            }
         }
 
         debug_assert!(arr.is_full());
-        Matrix::from_flat_array(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+        Matrix::from(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
     }
 }
 
 impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     where
         T: num::Zero + Add<T, Output = T> + Mul<T, Output = T> + Clone,
-        N: Mul<RCol> + typenum::Unsigned + ArrayLen<T> + for<'a> ArrayLen<&'a T>,
-        RCol: typenum::Unsigned,
-        LRow: typenum::Unsigned + Mul<N> + Mul<RCol>,
-        Prod<LRow, N>: ArrayLen<T>,
-        Prod<N, RCol>: ArrayLen<T>,
-        Prod<LRow, RCol>: ArrayLen<Prod<T, T>>,
-        Prod<LRow, RCol>: ArrayLen<T>
+        N: Mul<RCol> +
+           ArrayLen<Vector<T, RCol>> +
+           ArrayLen<T> +
+           for<'a> ArrayLen<&'a T>,
+        RCol: ArrayLen<T> + typenum::Unsigned,
+        LRow: ArrayLen<Vector<T, RCol>> + ArrayLen<Vector<T, N>> + typenum::Unsigned + Mul<RCol>,
+        Prod<LRow, RCol>: ArrayLen<T> + Rem<RCol>,
+        Mod<Prod<LRow, RCol>, RCol>: Same<U0>,
 {
     type Output = Matrix<Prod<T, T>, LRow, RCol>;
 
     fn mul(self, rhs: Matrix<T, N, RCol>) -> Self::Output {
         let mut res = ArrayVec::new();
 
-        for lrow in self.rows_ref() {
+        for lrow in self.rows() {
             for rcol in rhs.cols() {
                 let s = lrow.iter().cloned().zip(rcol.into_iter())
                     .map(|(a, b)| a.clone() * b)
@@ -412,7 +388,7 @@ impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
 
         debug_assert!(res.is_full());
 
-        Matrix::from_flat_array(res.into_inner().unwrap_or_else(|_| unreachable!()))
+        Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
     }
 }
 
@@ -470,193 +446,137 @@ impl<T, N> Matrix<T, N, N>
 
 // TODO: `into_rows` and `into_cols`
 
-impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
-    where
-        Row: Mul<Col> + typenum::Unsigned,
-        Col: typenum::Unsigned + ArrayLen<&'a T>,
-        Prod<Row, Col>: ArrayLen<T>
-{
-    #[inline]
-    pub fn rows_ref(&'a self) -> RowsRefIter<'a, T, Row, Col> {
-        RowsRefIter(&*self.0, 0)
-    }
-}
-
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
         T: Clone,
-        Row: Mul<Col> + typenum::Unsigned,
-        Col: typenum::Unsigned + ArrayLen<T>,
-        Prod<Row, Col>: ArrayLen<T>
+        Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
+        Col: ArrayLen<T>,
 {
     #[inline]
     pub fn rows(&self) -> RowsIter<T, Row, Col> {
-        RowsIter(&*self.0, 0)
-    }
-}
-
-impl<'a, T: 'a, Row, Col> Matrix<T, Row, Col>
-    where
-        Row: Mul<Col> + typenum::Unsigned + ArrayLen<&'a T>,
-        Col: typenum::Unsigned,
-        Prod<Row, Col>: ArrayLen<T>
-{
-    #[inline]
-    pub fn cols_ref(&'a self) -> ColsRefIter<'a, T, Row, Col> {
-        ColsRefIter(&*self.0, 0)
+        RowsIter(&self.0, 0)
     }
 }
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
         T: Clone,
-        Row: Mul<Col> + typenum::Unsigned + ArrayLen<T>,
-        Col: typenum::Unsigned,
-        Prod<Row, Col>: ArrayLen<T>
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T> + typenum::Unsigned,
 {
     #[inline]
     pub fn cols(&self) -> ColsIter<T, Row, Col> {
-        ColsIter(&*self.0, 0)
+        ColsIter(&self.0, 0)
     }
 }
 
-macro_rules! decl_row_iter {
-    ($name:ident, $item:ty) => {
-        pub struct $name<'a, T: 'a, Row, Col>
-            (&'a <Prod<Row, Col> as ArrayLen<T>>::Array, usize)
-            where
-                Row: Mul<Col>,
-                Prod<Row, Col>: ArrayLen<T> + 'a;
+pub struct RowsIter<'a, T: 'a, Row, Col>
+    (&'a Vector<Vector<T, Col>, Row>, usize)
+    where
+        Row: ArrayLen<Vector<T, Col>> + 'a,
+        Col: ArrayLen<T> + 'a;
 
-        impl<'a, T: 'a, Row, Col> Iterator
-            for $name<'a, T, Row, Col>
-            where
-                $item: Clone,
-                Row: Mul<Col> + typenum::Unsigned,
-                Col: typenum::Unsigned + ArrayLen<$item>,
-                Prod<Row, Col>: ArrayLen<T> + 'a,
-        {
-            type Item = Vector<$item, Col>;
+impl<'a, T: 'a, Row, Col> Iterator
+    for RowsIter<'a, T, Row, Col>
+    where
+        T: Clone,
+        Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
+        Col: ArrayLen<T>,
+{
+    type Item = Vector<T, Col>;
 
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.1 < Row::to_usize() {
-                    let s = self.1;
-                    self.1 += 1;
-
-                    let mut arr = ArrayVec::new();
-                    for x in &self.0.as_ref()[s * Col::to_usize() .. (s + 1) * Col::to_usize()] {
-                        // no-op for `&T`
-                        let x: $item = x.clone();
-                        arr.push(x);
-                    }
-                    debug_assert!(arr.is_full());
-
-                    Some(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
-                } else {
-                    None
-                }
-            }
-
-            #[inline]
-            fn size_hint(&self) -> (usize, Option<usize>) {
-                let s = Row::to_usize() - self.1;
-                (s, Some(s))
-            }
-
-            #[inline]
-            fn count(self) -> usize {
-                Row::to_usize() - self.1
-            }
-
-            #[inline]
-            fn nth(&mut self, n: usize) -> Option<Self::Item> {
-                assert!(n < Row::to_usize() - self.1);
-                self.1 += n;
-                self.next()
-            }
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 < Row::to_usize() {
+            let s = self.1;
+            let ret = self.0.as_ref()[s].clone();
+            self.1 += 1;
+            Some(ret)
+        } else {
+            None
         }
+    }
 
-        impl<'a, T: 'a, Row, Col> ExactSizeIterator for $name<'a, T, Row, Col>
-            where
-                $item: Clone,
-                Row: Mul<Col> + typenum::Unsigned,
-                Col: typenum::Unsigned + ArrayLen<$item>,
-                Prod<Row, Col>: ArrayLen<T> + 'a
-            {}
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let s = Row::to_usize() - self.1;
+        (s, Some(s))
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        Row::to_usize() - self.1
+    }
+
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.1 += n;
+        self.next()
     }
 }
 
-macro_rules! decl_col_iter {
-    ($name:ident, $item:ty) => {
-        pub struct $name<'a, T: 'a, Row, Col>
-            (&'a <Prod<Row, Col> as ArrayLen<T>>::Array, usize)
-            where
-                Row: Mul<Col>,
-                Prod<Row, Col>: ArrayLen<T> + 'a;
+impl<'a, T: 'a, Row, Col> ExactSizeIterator for RowsIter<'a, T, Row, Col>
+    where
+        T: Clone,
+        Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
+        Col: ArrayLen<T>,
+{}
 
-        impl<'a, T: 'a, Row, Col> Iterator
-            for $name<'a, T, Row, Col>
-            where
-                $item: Clone,
-                Row: Mul<Col> + typenum::Unsigned + ArrayLen<$item>,
-                Col: typenum::Unsigned,
-                Prod<Row, Col>: ArrayLen<T> + 'a
-        {
-            type Item = Vector<$item, Row>;
+pub struct ColsIter<'a, T: 'a, Row, Col>
+    (&'a Vector<Vector<T, Col>, Row>, usize)
+    where
+        Row: ArrayLen<Vector<T, Col>> + 'a,
+        Col: ArrayLen<T> + 'a;
 
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.1 < Col::to_usize() {
-                    let s = self.1;
-                    self.1 += 1;
+impl<'a, T: 'a, Row, Col> Iterator
+    for ColsIter<'a, T, Row, Col>
+    where
+        T: Clone,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
+        Col: ArrayLen<T> + typenum::Unsigned,
+{
+    type Item = Vector<T, Row>;
 
-                    let mut arr = ArrayVec::new();
-                    for x in (0..Row::to_usize()).map(|i| &self.0.as_ref()[Col::to_usize() * i + s]) {
-                        // no-op for `&T`
-                        let x: $item = x.clone();
-                        arr.push(x);
-                    }
-                    debug_assert!(arr.is_full());
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 < Col::to_usize() {
+            let s = self.1;
+            self.1 += 1;
 
-                    Some(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
-                } else {
-                    None
-                }
+            let mut arr = ArrayVec::new();
+            for x in self.0.iter().map(|row| row.iter().nth(s).unwrap()) { // FIXME
+                arr.push(x.clone());
             }
+            debug_assert!(arr.is_full());
 
-            #[inline]
-            fn size_hint(&self) -> (usize, Option<usize>) {
-                let s = Row::to_usize() - self.1;
-                (s, Some(s))
-            }
-
-            #[inline]
-            fn count(self) -> usize {
-                Row::to_usize() - self.1
-            }
-
-            #[inline]
-            fn nth(&mut self, n: usize) -> Option<Self::Item> {
-                assert!(self.1 + n < Col::to_usize());
-                self.1 += n;
-                self.next()
-            }
+            Some(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
+        } else {
+            None
         }
+    }
 
-        impl<'a, T: 'a, Row, Col> ExactSizeIterator for $name<'a, T, Row, Col>
-            where
-                $item: Clone,
-                Row: Mul<Col> + typenum::Unsigned + ArrayLen<$item>,
-                Col: typenum::Unsigned,
-                Prod<Row, Col>: ArrayLen<T> + 'a
-            {}
-    };
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let s = Col::to_usize() - self.1;
+        (s, Some(s))
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        Col::to_usize() - self.1
+    }
+
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.1 += n;
+        self.next()
+    }
 }
 
-decl_row_iter!(RowsRefIter, &'a T);
-decl_row_iter!(RowsIter, T);
-decl_col_iter!(ColsRefIter, &'a T);
-decl_col_iter!(ColsIter, T);
-
+impl<'a, T: 'a, Row, Col> ExactSizeIterator for ColsIter<'a, T, Row, Col>
+    where
+        T: Clone,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T> + typenum::Unsigned,
+        Col: ArrayLen<T> + typenum::Unsigned,
+{}
 
 #[test]
 fn test_matrix_rows_cols_iter() {
@@ -666,22 +586,6 @@ fn test_matrix_rows_cols_iter() {
     m[(2,2)] = 3;
     m[(0,2)] = 4;
     assert_eq!(m.dim(), (3, 3));
-
-    let mut rows = m.rows_ref();
-
-    assert_eq!(rows.len(), 3);
-    assert!(rows.next().unwrap().iter().eq(&[&1, &0, &4]));
-    assert!(rows.next().unwrap().iter().eq(&[&0, &2, &0]));
-    assert!(rows.next().unwrap().iter().eq(&[&0, &0, &3]));
-    assert_eq!(rows.next(), None);
-
-    let mut cols = m.cols_ref();
-
-    assert_eq!(cols.len(), 3);
-    assert!(cols.next().unwrap().iter().eq(&[&1, &0, &0]));
-    assert!(cols.next().unwrap().iter().eq(&[&0, &2, &0]));
-    assert!(cols.next().unwrap().iter().eq(&[&4, &0, &3]));
-    assert_eq!(cols.next(), None);
 
     let mut rows = m.rows();
 

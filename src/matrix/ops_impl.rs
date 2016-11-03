@@ -1,10 +1,10 @@
 use super::Matrix;
-use ::vector::ArrayLen;
+use ::vector::{Vector, ArrayLen};
 
 use typenum;
 use typenum::consts::*;
 use typenum::uint::UInt;
-use typenum::operator_aliases::{Diff, Prod};
+use typenum::operator_aliases::Diff;
 use num;
 use arrayvec::ArrayVec;
 
@@ -70,8 +70,9 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
         Bb: typenum::Bit,
         Bc: typenum::Bit,
         T: num::Signed + Clone,
-        UInt<UInt<UInt<U, Ba>, Bb>, Bc>: Mul + typenum::Unsigned + Sub<U1> + for<'a> ArrayLen<&'a T>,
-        Prod<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: ArrayLen<T>,
+        UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
+            ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
+            typenum::Unsigned + Sub<U1> + for<'a> ArrayLen<&'a T>,
         Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: Cofactor<Item = T>,
 {
     type Item = T;
@@ -111,7 +112,7 @@ impl<T> Cofactor for Matrix<T, U3, U3>
 
         let mut arr = ArrayVec::new();
 
-        for (ii, row) in self.rows_ref().enumerate() {
+        for (ii, row) in self.rows().enumerate() {
             if ii == i { continue; }
 
             for (jj, a) in row.into_iter().enumerate() {
@@ -125,9 +126,9 @@ impl<T> Cofactor for Matrix<T, U3, U3>
         let sgn = num::pow::pow(-T::one(), i + j);
 
         sgn *
-            Matrix::<T, U2, U2>::from_flat_array(arr
-                                                 .into_inner()
-                                                 .unwrap_or_else(|_| unreachable!()))
+            Matrix::<T, U2, U2>::from(Vector::new(arr
+                                      .into_inner()
+                                      .unwrap_or_else(|_| unreachable!())))
                 .determinant()
     }
 }
@@ -141,11 +142,13 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
         Bc: typenum::Bit,
 
         T: num::Signed + Clone,
-        UInt<UInt<UInt<U, Ba>, Bb>, Bc>: Mul + typenum::Unsigned + Sub<U1> + for<'a> ArrayLen<&'a T>,
-        <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as Mul>::Output: ArrayLen<T>,
+        UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
+            ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
+            typenum::Unsigned + Sub<U1> + for<'a> ArrayLen<&'a T>,
 
-        Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>: Mul,
-        <Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1> as Mul>::Output: ArrayLen<T>,
+        Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>: ArrayLen<T> +
+            ArrayLen<Vector<T, Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>> +
+            ArrayLen<<Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1> as ArrayLen<T>>::Array>,
         Matrix<T,
                Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>,
                Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>: Determinant<Item = T>,
@@ -158,13 +161,17 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
 
         let mut arr = ArrayVec::new();
 
-        for (ii, row) in self.rows_ref().enumerate() {
+        for (ii, row) in self.rows().enumerate() {
             if ii == i { continue; }
+
+            let mut subrow = ArrayVec::new();
 
             for (jj, a) in row.into_iter().enumerate() {
                 if jj == j { continue; }
-                arr.push(a.clone());
+                subrow.push(a);
             }
+
+            arr.push(subrow.into_inner().unwrap_or_else(|_| unreachable!()));
         }
 
         debug_assert!(arr.is_full());
@@ -174,9 +181,9 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
         sgn *
             Matrix::<T,
                      Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>,
-                     Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>::from_flat_array(arr
-                                                                                 .into_inner()
-                                                                                 .unwrap_or_else(|_| unreachable!()))
+                     Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>::new(arr
+                                                                     .into_inner()
+                                                                     .unwrap_or_else(|_| unreachable!()))
             .determinant()
     }
 }
@@ -191,6 +198,20 @@ fn test_det_cof_impl() {
     assert_eq!(m.cofactor(1, 1), -12);
     let m = Matrix::<i32, U4, U4>::new([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]]);
     assert_eq!(m.determinant(), 0);
+    let m = Matrix::<i32,  U6,  U6>::new([[1, 2, 3, 4, 5, 6],
+                                         [7, 8, 9, 10, 11, 12],
+                                         [13, 14, 15, 16, 17, 18],
+                                         [19, 20, 21, 22, 23, 24],
+                                         [25, 26, 27, 28, 29, 30],
+                                         [31, 32, 33, 34, 35, 36]]);
+    assert_eq!(m.determinant(), 0);
+    let m = Matrix::<i32,  U6,  U6>::new([[1, 1, 1, 1, 1, 63],
+                                         [7, 8, 9, 10, 11, 12],
+                                         [13, 14, 1, 18, 17, 18],
+                                         [19, 80, 81, 22, 23, 20],
+                                         [25, 26, 27, 28, 29, 30],
+                                         [31, 32, 34, 34, 35, 44]]);
+    assert_eq!(m.determinant(), -535680);
 
     // TODO:
     // let m = m.into_flat_iter().map(|a| BigInt::from(a)).collect::<Matrix::<_, U3, U3>>();
