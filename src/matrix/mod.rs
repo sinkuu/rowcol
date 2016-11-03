@@ -145,7 +145,7 @@ impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
 
     #[inline]
     fn index(&self, (i, j): (usize, usize)) -> &T {
-        &self.0.as_slice()[i].as_slice()[j]
+        &self.0[i][j]
     }
 }
 
@@ -164,8 +164,8 @@ impl<T, Row, Col, IRow, ICol> Index<(PhantomData<IRow>, PhantomData<ICol>)> for 
     fn index(&self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &T {
         unsafe {
             &self.0
-                .as_ref().get_unchecked(IRow::to_usize())
-                .as_ref().get_unchecked(ICol::to_usize())
+                .get_unchecked(IRow::to_usize())
+                .get_unchecked(ICol::to_usize())
         }
     }
 }
@@ -193,8 +193,8 @@ impl<T, Row, Col, IRow, ICol> IndexMut<(PhantomData<IRow>, PhantomData<ICol>)> f
     #[inline]
     fn index_mut(&mut self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &mut T {
         unsafe {
-            self.0.as_mut().get_unchecked_mut(IRow::to_usize())
-                .as_mut().get_unchecked_mut(ICol::to_usize())
+            self.0.get_unchecked_mut(IRow::to_usize())
+                .get_unchecked_mut(ICol::to_usize())
         }
     }
 }

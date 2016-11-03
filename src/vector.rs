@@ -5,7 +5,7 @@ use typenum::marker_traits::Unsigned;
 
 use arrayvec::{self, ArrayVec};
 
-use std::ops::{Deref, DerefMut, Add, Sub, Rem};
+use std::ops::{Deref, DerefMut, Add, Sub, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 
 /// A fixed-size vector whose elements are allocated on the stack.
@@ -53,6 +53,16 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
             Mod<N, I>: Same<U0>
     {
         VectorChunks::new(ArrayVec::from(self.0))
+    }
+
+    #[inline]
+    pub unsafe fn get_unchecked(&self, i: usize) -> &T {
+        self.as_slice().get_unchecked(i)
+    }
+
+    #[inline]
+    pub unsafe fn get_unchecked_mut(&mut self, i: usize) -> &mut T {
+        self.as_slice_mut().get_unchecked_mut(i)
     }
 }
 
@@ -142,6 +152,20 @@ impl<T, N> Eq for Vector<T, N>
         T: PartialEq,
         N: ArrayLen<T>,
 {
+}
+
+impl<T, N> Index<usize> for Vector<T, N> where N: ArrayLen<T> {
+    type Output = T;
+
+    fn index(&self, idx: usize) -> &T {
+        &self.as_slice()[idx]
+    }
+}
+
+impl<T, N> IndexMut<usize> for Vector<T, N> where N: ArrayLen<T> {
+    fn index_mut(&mut self, idx: usize) -> &mut T {
+        &mut self.as_slice_mut()[idx]
+    }
 }
 
 macro_rules! impl_vector_arith {
