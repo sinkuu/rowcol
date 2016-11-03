@@ -8,7 +8,7 @@ use typenum::operator_aliases::{Diff, Prod};
 use num;
 use arrayvec::ArrayVec;
 
-use std::ops::{Add, Mul, Sub, Neg};
+use std::ops::{Add, Mul, Sub};
 
 
 /// Internal trait used for determinant implementation dispatch.
@@ -71,7 +71,7 @@ impl<T, U, Ba, Bb, Bc> DeterminantImpl for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>,
         Bb: typenum::Bit,
         Bc: typenum::Bit,
         T: num::Signed + Clone,
-        UInt<UInt<UInt<U, Ba>, Bb>, Bc>: Mul + typenum::Unsigned,
+        UInt<UInt<UInt<U, Ba>, Bb>, Bc>: Mul + typenum::Unsigned + Sub<U1> + for<'a> ArrayLen<&'a T>,
         Prod<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: ArrayLen<T>,
         Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: CofactorImpl<Item = T>,
 {
@@ -79,7 +79,7 @@ impl<T, U, Ba, Bb, Bc> DeterminantImpl for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>,
 
     fn determinant_impl(&self) -> T {
         (0 .. <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize())
-            .map(|i| self[(i, 0)].clone() + self.cofactor_impl(i, 0))
+            .map(|i| self[(i, 0)].clone() * self.cofactor_impl(i, 0))
             .fold(T::zero(), Add::add)
     }
 }
@@ -103,10 +103,6 @@ impl<T> CofactorImpl for Matrix<T, U3, U3>
     where
         U3: Mul + typenum::Unsigned + for<'a> ArrayLen<&'a T>,
         T: num::Signed + Clone,
-        // Prod<U3, U3>: ArrayLen<T>,
-        // Diff<UInt<U, UInt<Ba, Bb>>, U1>: Mul,
-        // Prod<Diff<UInt<U, UInt<Ba, Bb>>, U1>, Diff<UInt<U, UInt<Ba, Bb>>, U1>>: ArrayLen<T>,
-        // Matrix<T, Diff<UInt<U, UInt<Ba, Bb>>, U1>, Diff<UInt<U, UInt<Ba, Bb>>, U1>>: DeterminantImpl<Item = T>,
 {
     type Item = T;
 
@@ -150,8 +146,9 @@ impl<T, U, Ba, Bb, Bc> CofactorImpl for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc
 
         Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>: Mul,
         <Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1> as Mul>::Output: ArrayLen<T>,
-        Matrix<T, <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as Sub<U1>>::Output, <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as Sub<U1>>::Output>:
-            DeterminantImpl<Item = T>,
+        Matrix<T,
+               Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>,
+               Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>: DeterminantImpl<Item = T>,
 {
     type Item = T;
 
@@ -174,12 +171,13 @@ impl<T, U, Ba, Bb, Bc> CofactorImpl for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc
 
         let sgn = num::pow::pow(-T::one(), i + j);
 
-        sgn * Matrix::<T,
-                     <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as Sub<U1>>::Output,
-                     <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as Sub<U1>>::Output>::from_flat_array(arr
-                                                                                  .into_inner()
-                                                                                  .unwrap_or_else(|_| unreachable!()))
-                .determinant_impl()
+        sgn *
+            Matrix::<T,
+                     Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>,
+                     Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>::from_flat_array(arr
+                                                                                 .into_inner()
+                                                                                 .unwrap_or_else(|_| unreachable!()))
+            .determinant_impl()
     }
 }
 
