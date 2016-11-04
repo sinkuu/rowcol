@@ -6,7 +6,7 @@ authors = ["sinkuu <sinkuupump@gmail.com>"]
 license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/rowcol/"
 repository = "https://github.com/sinkuu/rowcol"
-keywords = ["matrix", "array"]
+keywords = ["matrix", "array", "stack"]
 
 [dependencies]
 typenum = "1.4.0"
