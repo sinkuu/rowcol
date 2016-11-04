@@ -7,6 +7,7 @@ use arrayvec::{self, ArrayVec};
 
 use std::ops::{Deref, DerefMut, Add, Sub, Rem, Index, IndexMut};
 use std::marker::PhantomData;
+use std::slice::Iter as SliceIter;
 
 /// A fixed-size vector whose elements are allocated on the stack.
 ///
@@ -42,8 +43,8 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     }
 
     #[inline]
-    pub fn iter(&self) -> Iter<T> {
-        Iter(self.as_slice().iter())
+    pub fn iter(&self) -> SliceIter<T> {
+        self.as_slice().iter()
     }
 
     #[inline]
@@ -295,34 +296,13 @@ fn test_vector_arith() {
     assert_eq!(&a - &b, a_minus_b);
 }
 
-pub struct Iter<'a, T: 'a>(::std::slice::Iter<'a, T>);
-
-impl<'a, T: 'a> Iterator for Iter<'a, T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-}
-
 impl<T, N> IntoIterator for Vector<T, N> where N: ArrayLen<T> {
     type Item = T;
-    type IntoIter = IntoIter<T,  N>;
+    type IntoIter = arrayvec::IntoIter<N::Array>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        IntoIter(ArrayVec::from(self.into_inner()).into_iter())
-    }
-}
-
-pub struct IntoIter<T, N>(arrayvec::IntoIter<N::Array>) where N: ArrayLen<T>;
-
-impl<T, N> Iterator for IntoIter<T, N> where N: ArrayLen<T> {
-    type Item = T;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
+        ArrayVec::from(self.into_inner()).into_iter()
     }
 }
 
@@ -353,12 +333,14 @@ impl<T, N, I> Iterator for VectorChunks<T, N, I>
             None
         } else {
             let mut res = ArrayVec::new();
-            res.extend((&mut self.it).take(I::to_usize()));
+            // `<ArrayVec as Extend>::extend` consumes only `I` items
+            res.extend(&mut self.it);
             debug_assert!(res.is_full());
             Some(Vector(res.into_inner().unwrap_or_else(|_| unreachable!())))
         }
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let len = self.it.len() / I::to_usize();
         (len, Some(len))
