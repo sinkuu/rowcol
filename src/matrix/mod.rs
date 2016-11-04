@@ -10,6 +10,8 @@ use num;
 
 use std::ops::{Add, Sub, Mul, Rem, Index, IndexMut};
 use std::marker::PhantomData;
+use std::fmt::{Debug, Formatter};
+use std::fmt::Result as FmtResult;
 
 use vector::{Vector, ArrayLen};
 
@@ -126,14 +128,29 @@ impl<T, Row, Col> Eq for Matrix<T, Row, Col>
 {
 }
 
-impl<T, Row, Col> ::std::fmt::Debug for Matrix<T, Row, Col>
+impl<T, Row, Col> Debug for Matrix<T, Row, Col>
     where
-        Row: ArrayLen<Vector<T, Col>>,
+        T: Debug,
+        Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
         Col: ArrayLen<T>,
 {
-    fn fmt(&self, fmt: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
-        unimplemented!()
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        try!(write!(fmt, "Matrix["));
+
+        let last = self.0.len() - 1;
+        for (i, row) in self.0.iter().enumerate() {
+            try!(row.as_slice().fmt(fmt));
+            if i != last { try!(write!(fmt, ", ")); }
+        }
+
+        write!(fmt, "]")
     }
+}
+
+#[test]
+fn test_debug_matrix() {
+    let m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    assert_eq!(format!("{:?}", m), "Matrix[[1, 2], [3, 4]]");
 }
 
 impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>

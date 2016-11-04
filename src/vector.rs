@@ -1,7 +1,7 @@
+use typenum;
 use typenum::consts::*;
 use typenum::operator_aliases::Mod;
 use typenum::type_operators::Same;
-use typenum::marker_traits::Unsigned;
 
 use arrayvec::{self, ArrayVec};
 
@@ -63,6 +63,13 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, i: usize) -> &mut T {
         self.as_slice_mut().get_unchecked_mut(i)
+    }
+}
+
+impl<T, N> Vector<T, N> where N: ArrayLen<T> + typenum::Unsigned {
+    #[inline]
+    pub fn len(&self) -> usize {
+        N::to_usize()
     }
 }
 
@@ -331,7 +338,7 @@ impl<T, N, I> VectorChunks<T, N, I> where N: ArrayLen<T> {
 impl<T, N, I> Iterator for VectorChunks<T, N, I>
     where
         N: ArrayLen<T> + Rem<I>,
-        I: Unsigned + ArrayLen<T>,
+        I: typenum::Unsigned + ArrayLen<T>,
         Mod<N, I>: Same<U0>,
 {
     type Item = Vector<T, I>;
@@ -356,7 +363,7 @@ impl<T, N, I> Iterator for VectorChunks<T, N, I>
 impl<T, N, I> ExactSizeIterator for VectorChunks<T, N, I>
     where
         N: ArrayLen<T> + Rem<I>,
-        I: Unsigned + ArrayLen<T>,
+        I: typenum::Unsigned + ArrayLen<T>,
         Mod<N, I>: Same<U0>,
 {
 }

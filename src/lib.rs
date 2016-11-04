@@ -4,7 +4,7 @@
 //! This let vectors and matrices be internally represented as fixed-length arrays,
 //! therefore they are allocated on the stack, and becomes `Copy` if their content
 //! is `Copy`. Also, errors like computing the determinant of a non-square matrix
-//! can be detected at compile-time, instead of runtime panic.
+//! can be detected at compile-time, instead of causing runtime panic.
 //!
 //! [`Vector`]: ./vector/struct.Vector.html
 //! [`Matrix`]: ./matrix/struct.Matrix.html
