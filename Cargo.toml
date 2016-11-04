@@ -9,7 +9,7 @@ repository = "https://github.com/sinkuu/rowcol"
 keywords = ["matrix", "array", "stack"]
 
 [dependencies]
-typenum = "1.4.0"
+typenum = "1.5.0"
 num = "0.1.36"
 
 [dependencies.arrayvec]
