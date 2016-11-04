@@ -30,6 +30,21 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     }
 
     #[inline]
+    pub fn generate<F>(mut f: F) -> Self where F: FnMut(usize) -> T {
+        use std::mem;
+
+        unsafe {
+            let mut arr = mem::uninitialized::<N::Array>();
+
+            for (i, e) in arr.as_mut().into_iter().enumerate() {
+                mem::forget(mem::replace(e, f(i)));
+            }
+
+            Vector(arr)
+        }
+    }
+
+    #[inline]
     pub fn into_inner(self) -> N::Array {
         self.0
     }
@@ -170,16 +185,26 @@ impl<T, N> Eq for Vector<T, N>
 }
 
 impl<T, N> num::Zero for Vector<T, N> where T: num::Zero, N: ArrayLen<T> {
+    #[inline]
     fn zero() -> Self {
-        let mut arr = ArrayVec::new();
-        for _ in 0..N::to_usize() {
-            arr.push(T::zero());
-        }
-        Vector(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+        Vector::generate(|_| T::zero())
     }
 
+    #[inline]
     fn is_zero(&self) -> bool {
         self.iter().all(num::Zero::is_zero)
+    }
+}
+
+impl<T, N> num::Bounded for Vector<T, N> where T: num::Bounded, N: ArrayLen<T> {
+    #[inline]
+    fn min_value() -> Self {
+        Vector::generate(|_| T::min_value())
+    }
+
+    #[inline]
+    fn max_value() -> Self {
+        Vector::generate(|_| T::max_value())
     }
 }
 
