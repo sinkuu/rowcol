@@ -498,7 +498,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 {
     #[inline]
     pub fn rows_iter(&self) -> RowsIter<T, Row, Col> {
-        RowsIter(&self.0, 0)
+        RowsIter(&self.0, 0, Col::to_usize())
     }
 }
 
@@ -510,12 +510,12 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 {
     #[inline]
     pub fn cols_iter(&self) -> ColsIter<T, Row, Col> {
-        ColsIter(&self.0, 0)
+        ColsIter(&self.0, 0, Row::to_usize())
     }
 }
 
 pub struct RowsIter<'a, T: 'a, Row, Col>
-    (&'a Vector<Vector<T, Col>, Row>, usize)
+    (&'a Vector<Vector<T, Col>, Row>, usize, usize)
     where
         Row: ArrayLen<Vector<T, Col>> + 'a,
         Col: ArrayLen<T> + 'a;
@@ -530,7 +530,7 @@ impl<'a, T: 'a, Row, Col> Iterator
     type Item = Vector<T, Col>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.1 < Row::to_usize() {
+        if self.1 < self.2 {
             let s = self.1;
             let ret = self.0.as_ref()[s].clone();
             self.1 += 1;
@@ -571,8 +571,26 @@ impl<'a, T: 'a, Row, Col> ExactSizeIterator for RowsIter<'a, T, Row, Col>
     }
 }
 
+impl<'a, T: 'a, Row, Col> DoubleEndedIterator for RowsIter<'a, T, Row, Col>
+    where
+        T: Clone,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    fn next_back(&mut self) -> Option<Vector<T, Col>> {
+        if self.1 < self.2 {
+            let s = self.2;
+            let ret = self.0.as_ref()[s-1].clone();
+            self.2 -= 1;
+            Some(ret)
+        } else {
+            None
+        }
+    }
+}
+
 pub struct ColsIter<'a, T: 'a, Row, Col>
-    (&'a Vector<Vector<T, Col>, Row>, usize)
+    (&'a Vector<Vector<T, Col>, Row>, usize, usize)
     where
         Row: ArrayLen<Vector<T, Col>> + 'a,
         Col: ArrayLen<T> + 'a;
@@ -587,7 +605,7 @@ impl<'a, T: 'a, Row, Col> Iterator
     type Item = Vector<T, Row>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.1 < Col::to_usize() {
+        if self.1 < self.2 {
             let s = self.1;
             self.1 += 1;
 
@@ -634,6 +652,31 @@ impl<'a, T: 'a, Row, Col> ExactSizeIterator for ColsIter<'a, T, Row, Col>
     }
 }
 
+impl<'a, T: 'a, Row, Col> DoubleEndedIterator
+    for ColsIter<'a, T, Row, Col>
+    where
+        T: Clone,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
+        Col: ArrayLen<T>,
+{
+    fn next_back(&mut self) -> Option<Vector<T, Row>> {
+        if self.1 < self.2 {
+            let s = self.2;
+            self.2 -= 1;
+
+            let mut arr = ArrayVec::new();
+            for x in self.0.iter().map(|row| row.iter().nth(s-1).unwrap()) { // FIXME
+                arr.push(x.clone());
+            }
+            debug_assert!(arr.is_full());
+
+            Some(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
+        } else {
+            None
+        }
+    }
+}
+
 #[test]
 fn test_matrix_rows_cols_iter() {
     let mut m: Matrix<i32, U3, U3> = Default::default();
@@ -652,12 +695,30 @@ fn test_matrix_rows_cols_iter() {
     assert_eq!(rows.next(), None);
     assert_eq!(rows.count(), 0);
 
+    let mut rows = m.rows_iter().rev();
+
+    assert_eq!(rows.len(), 3);
+    assert!(rows.next().unwrap().iter().eq(&[0, 0, 3]));
+    assert!(rows.next().unwrap().iter().eq(&[0, 2, 0]));
+    assert!(rows.next().unwrap().iter().eq(&[1, 0, 4]));
+    assert_eq!(rows.next(), None);
+    assert_eq!(rows.count(), 0);
+
     let mut cols = m.cols_iter();
 
     assert_eq!(cols.len(), 3);
     assert!(cols.next().unwrap().iter().eq(&[1, 0, 0]));
     assert!(cols.next().unwrap().iter().eq(&[0, 2, 0]));
     assert!(cols.next().unwrap().iter().eq(&[4, 0, 3]));
+    assert_eq!(cols.next(), None);
+    assert_eq!(cols.count(), 0);
+
+    let mut cols = m.cols_iter().rev();
+
+    assert_eq!(cols.len(), 3);
+    assert!(cols.next().unwrap().iter().eq(&[4, 0, 3]));
+    assert!(cols.next().unwrap().iter().eq(&[0, 2, 0]));
+    assert!(cols.next().unwrap().iter().eq(&[1, 0, 0]));
     assert_eq!(cols.next(), None);
     assert_eq!(cols.count(), 0);
 }
