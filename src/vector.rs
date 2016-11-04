@@ -5,6 +5,8 @@ use typenum::type_operators::Same;
 
 use arrayvec::{self, ArrayVec};
 
+use num;
+
 use std::ops::{Deref, DerefMut, Add, Sub, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 use std::slice::Iter as SliceIter;
@@ -67,7 +69,7 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     }
 }
 
-impl<T, N> Vector<T, N> where N: ArrayLen<T> + typenum::Unsigned {
+impl<T, N> Vector<T, N> where N: ArrayLen<T> {
     #[inline]
     pub fn len(&self) -> usize {
         N::to_usize()
@@ -165,6 +167,20 @@ impl<T, N> Eq for Vector<T, N>
         T: PartialEq,
         N: ArrayLen<T>,
 {
+}
+
+impl<T, N> num::Zero for Vector<T, N> where T: num::Zero, N: ArrayLen<T> {
+    fn zero() -> Self {
+        let mut arr = ArrayVec::new();
+        for _ in 0..N::to_usize() {
+            arr.push(T::zero());
+        }
+        Vector(arr.into_inner().unwrap_or_else(|_| unreachable!()))
+    }
+
+    fn is_zero(&self) -> bool {
+        self.iter().all(num::Zero::is_zero)
+    }
 }
 
 impl<T, N> Index<usize> for Vector<T, N> where N: ArrayLen<T> {
@@ -323,7 +339,7 @@ impl<T, N, I> VectorChunks<T, N, I> where N: ArrayLen<T> {
 impl<T, N, I> Iterator for VectorChunks<T, N, I>
     where
         N: ArrayLen<T> + Rem<I>,
-        I: typenum::Unsigned + ArrayLen<T>,
+        I: ArrayLen<T>,
         Mod<N, I>: Same<U0>,
 {
     type Item = Vector<T, I>;
@@ -350,7 +366,7 @@ impl<T, N, I> Iterator for VectorChunks<T, N, I>
 impl<T, N, I> ExactSizeIterator for VectorChunks<T, N, I>
     where
         N: ArrayLen<T> + Rem<I>,
-        I: typenum::Unsigned + ArrayLen<T>,
+        I: ArrayLen<T>,
         Mod<N, I>: Same<U0>,
 {
 }
@@ -366,7 +382,7 @@ fn test_vector_chunks() {
     assert_eq!(it.len(), 1);
 }
 
-pub trait ArrayLen<T> {
+pub trait ArrayLen<T>: typenum::Unsigned {
     type Array: AsRef<[T]> + AsMut<[T]> + arrayvec::Array<Item = T>;
 }
 

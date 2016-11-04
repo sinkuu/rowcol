@@ -72,7 +72,7 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
         T: num::Signed + Clone,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
-            typenum::Unsigned + Sub<U1> + for<'a> ArrayLen<&'a T>,
+            Sub<U1> + for<'a> ArrayLen<&'a T>,
         Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: Cofactor<Item = T>,
 {
     type Item = T;
@@ -102,7 +102,7 @@ impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
 
 impl<T> Cofactor for Matrix<T, U3, U3>
     where
-        U3: Mul + typenum::Unsigned + for<'a> ArrayLen<&'a T>,
+        U3: Mul + for<'a> ArrayLen<&'a T>,
         T: num::Signed + Clone,
 {
     type Item = T;
@@ -144,7 +144,7 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
         T: num::Signed + Clone,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
-            typenum::Unsigned + Sub<U1> + for<'a> ArrayLen<&'a T>,
+            Sub<U1> + for<'a> ArrayLen<&'a T>,
 
         Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>: ArrayLen<T> +
             ArrayLen<Vector<T, Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>> +
