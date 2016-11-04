@@ -33,7 +33,6 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     /// # use rowcol::Matrix;
     /// let mat = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     /// ```
-    #[inline]
     pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
         -> Matrix<T, Row, Col>
     {
@@ -536,7 +535,13 @@ impl<'a, T: 'a, Row, Col> ExactSizeIterator for RowsIter<'a, T, Row, Col>
         T: Clone,
         Row: ArrayLen<Vector<T, Col>> + typenum::Unsigned,
         Col: ArrayLen<T>,
-{}
+{
+    // avoiding an assert in the provided method
+    #[inline]
+    fn len(&self) -> usize {
+        Row::to_usize() - self.1
+    }
+}
 
 pub struct ColsIter<'a, T: 'a, Row, Col>
     (&'a Vector<Vector<T, Col>, Row>, usize)
@@ -593,7 +598,13 @@ impl<'a, T: 'a, Row, Col> ExactSizeIterator for ColsIter<'a, T, Row, Col>
         T: Clone,
         Row: ArrayLen<Vector<T, Col>> + ArrayLen<T> + typenum::Unsigned,
         Col: ArrayLen<T> + typenum::Unsigned,
-{}
+{
+    // avoiding an assert in the provided method
+    #[inline]
+    fn len(&self) -> usize {
+        Col::to_usize() - self.1
+    }
+}
 
 #[test]
 fn test_matrix_rows_cols_iter() {
@@ -611,6 +622,7 @@ fn test_matrix_rows_cols_iter() {
     assert!(rows.next().unwrap().iter().eq(&[0, 2, 0]));
     assert!(rows.next().unwrap().iter().eq(&[0, 0, 3]));
     assert_eq!(rows.next(), None);
+    assert_eq!(rows.count(), 0);
 
     let mut cols = m.cols();
 
@@ -619,5 +631,6 @@ fn test_matrix_rows_cols_iter() {
     assert!(cols.next().unwrap().iter().eq(&[0, 2, 0]));
     assert!(cols.next().unwrap().iter().eq(&[4, 0, 3]));
     assert_eq!(cols.next(), None);
+    assert_eq!(cols.count(), 0);
 }
 
