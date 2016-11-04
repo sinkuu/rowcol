@@ -71,6 +71,11 @@ impl<T, N> Vector<T, N> where N: ArrayLen<T> + typenum::Unsigned {
     pub fn len(&self) -> usize {
         N::to_usize()
     }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        false
+    }
 }
 
 impl<T, N> Clone for Vector<T, N>

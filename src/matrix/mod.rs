@@ -180,7 +180,7 @@ impl<T, Row, Col, IRow, ICol> Index<(PhantomData<IRow>, PhantomData<ICol>)> for 
     #[inline]
     fn index(&self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &T {
         unsafe {
-            &self.0
+            self.0
                 .get_unchecked(IRow::to_usize())
                 .get_unchecked(ICol::to_usize())
         }
@@ -366,8 +366,8 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
     fn mul(self, rhs: T) -> Self::Output {
         let mut arr = ArrayVec::new();
 
-        for row in self.0.into_iter() {
-            for x in row.into_iter() {
+        for row in self.0 {
+            for x in row {
                 arr.push(x * rhs.clone());
             }
         }
