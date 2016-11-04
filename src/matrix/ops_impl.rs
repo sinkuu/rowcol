@@ -112,7 +112,7 @@ impl<T> Cofactor for Matrix<T, U3, U3>
 
         let mut arr = ArrayVec::new();
 
-        for (ii, row) in self.rows().enumerate() {
+        for (ii, row) in self.rows_iter().enumerate() {
             if ii == i { continue; }
 
             for (jj, a) in row.into_iter().enumerate() {
@@ -161,7 +161,7 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
 
         let mut arr = ArrayVec::new();
 
-        for (ii, row) in self.rows().enumerate() {
+        for (ii, row) in self.rows_iter().enumerate() {
             if ii == i { continue; }
 
             let mut subrow = ArrayVec::new();

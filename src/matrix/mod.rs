@@ -72,6 +72,34 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     pub fn dim(&self) -> (usize, usize) {
         (Row::to_usize(), Col::to_usize())
     }
+
+    #[inline]
+    pub fn rows(&self) -> usize {
+        Row::to_usize()
+    }
+
+    #[inline]
+    pub fn cols(&self) -> usize {
+        Col::to_usize()
+    }
+}
+
+impl<T, Row, Col> Matrix<T, Row, Col>
+    where
+        T: Clone,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T> + typenum::Unsigned,
+        Col: ArrayLen<T> + ArrayLen<Vector<T, Row>> + typenum::Unsigned,
+{
+    pub fn transposed(&self) -> Matrix<T, Col, Row> {
+        let arr: ArrayVec<_> = self.cols_iter().collect();
+        Matrix(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
+    }
+}
+
+#[test]
+fn test_transposed() {
+    let mat = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    assert_eq!(mat.transposed(), Matrix::new([[1, 3], [2, 4]]));
 }
 
 impl<T, Row, Col> Default for Matrix<T, Row, Col>
@@ -393,8 +421,8 @@ impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     fn mul(self, rhs: Matrix<T, N, RCol>) -> Self::Output {
         let mut res = ArrayVec::new();
 
-        for lrow in self.rows() {
-            for rcol in rhs.cols() {
+        for lrow in self.rows_iter() {
+            for rcol in rhs.cols_iter() {
                 let s = lrow.iter().cloned().zip(rcol.into_iter())
                     .map(|(a, b)| a.clone() * b)
                     .fold(T::zero(), Add::add);
@@ -469,7 +497,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Col: ArrayLen<T>,
 {
     #[inline]
-    pub fn rows(&self) -> RowsIter<T, Row, Col> {
+    pub fn rows_iter(&self) -> RowsIter<T, Row, Col> {
         RowsIter(&self.0, 0)
     }
 }
@@ -481,7 +509,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Col: ArrayLen<T> + typenum::Unsigned,
 {
     #[inline]
-    pub fn cols(&self) -> ColsIter<T, Row, Col> {
+    pub fn cols_iter(&self) -> ColsIter<T, Row, Col> {
         ColsIter(&self.0, 0)
     }
 }
@@ -615,7 +643,7 @@ fn test_matrix_rows_cols_iter() {
     m[(0,2)] = 4;
     assert_eq!(m.dim(), (3, 3));
 
-    let mut rows = m.rows();
+    let mut rows = m.rows_iter();
 
     assert_eq!(rows.len(), 3);
     assert!(rows.next().unwrap().iter().eq(&[1, 0, 4]));
@@ -624,7 +652,7 @@ fn test_matrix_rows_cols_iter() {
     assert_eq!(rows.next(), None);
     assert_eq!(rows.count(), 0);
 
-    let mut cols = m.cols();
+    let mut cols = m.cols_iter();
 
     assert_eq!(cols.len(), 3);
     assert!(cols.next().unwrap().iter().eq(&[1, 0, 0]));
