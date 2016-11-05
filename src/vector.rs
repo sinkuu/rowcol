@@ -8,7 +8,7 @@ use arrayvec::{self, ArrayVec};
 use num;
 use num::Float;
 
-use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Rem, Index, IndexMut};
+use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Neg, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 use std::slice::Iter as SliceIter;
 use std::slice::IterMut as SliceIterMut;
@@ -367,6 +367,22 @@ impl<T, U, N> Div<U> for Vector<T, N>
             let mut arr = mem::uninitialized::<<N as ArrayLen<<T as Div<U>>::Output>>::Array>();
             for (e, x) in arr.as_mut().into_iter().zip(self) {
                 mem::forget(mem::replace(e, x / rhs.clone()));
+            }
+            Vector::new(arr)
+        }
+    }
+}
+
+impl<T, N> Neg for Vector<T, N>
+    where T: Neg, N: ArrayLen<T> + ArrayLen<<T as Neg>::Output>
+{
+    type Output = Vector<<T as Neg>::Output, N>;
+
+    fn neg(self) -> Self::Output {
+        unsafe {
+            let mut arr = mem::uninitialized::<<N as ArrayLen<<T as Neg>::Output>>::Array>();
+            for (e, x) in arr.as_mut().into_iter().zip(self) {
+                mem::forget(mem::replace(e, -x));
             }
             Vector::new(arr)
         }

@@ -8,7 +8,7 @@ use arrayvec::ArrayVec;
 
 use num;
 
-use std::ops::{Add, Sub, Mul, Rem, Index, IndexMut};
+use std::ops::{Add, Sub, Mul, Div, Neg, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 use std::fmt::{Debug, Formatter};
 use std::fmt::Result as FmtResult;
@@ -416,6 +416,25 @@ impl_matrix_arith!(T &T: Sub, sub);
 impl_matrix_arith!(&T &T: Add, add);
 impl_matrix_arith!(&T &T: Sub, sub);
 
+impl<T, Row, Col> Neg for Matrix<T, Row, Col>
+    where
+        T: Neg,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as Neg>::Output, Col>>,
+        Col: ArrayLen<T> + ArrayLen<<T as Neg>::Output>,
+{
+    type Output = Matrix<<T as Neg>::Output, Row, Col>;
+
+    fn neg(self) -> Self::Output {
+        unsafe {
+            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<<T as Neg>::Output, Col>>>::Array>();
+            for (rnew, rold) in arr.as_mut().into_iter().zip(self.0) {
+                mem::forget(mem::replace(rnew, -rold));
+            }
+            Matrix(Vector::new(arr))
+        }
+    }
+}
+
 /*
 impl<T, U, Row, Col> Mul<U> for Matrix<T, Row, Col>
     where
@@ -486,6 +505,26 @@ impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     }
 }
 
+impl<T, U, Row, Col> Div<U> for Matrix<T, Row, Col>
+    where
+        T: Div<U>,
+        U: Clone,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as Div<U>>::Output, Col>>,
+        Col: ArrayLen<T> + ArrayLen<<T as Div<U>>::Output>,
+{
+    type Output = Matrix<<T as Div<U>>::Output, Row, Col>;
+
+    fn div(self, rhs: U) -> Self::Output {
+        unsafe {
+            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<<T as Div<U>>::Output, Col>>>::Array>();
+            for (e, row) in arr.as_mut().into_iter().zip(self.0) {
+                mem::forget(mem::replace(e, row / rhs.clone()));
+            }
+            Matrix(Vector::new(arr))
+        }
+    }
+}
+
 #[test]
 fn test_matrix_add_sub_mul() {
     let mut m1 = Matrix::<i32, U2, U2>::default();
@@ -499,6 +538,7 @@ fn test_matrix_add_sub_mul() {
     assert_eq!(m3, Matrix::new([[1, 0], [0, 5]]));
     assert_eq!(m3[(0,0)], 1);
     assert_eq!(m3[(1,1)], 5);
+    assert_eq!(-m3, Matrix::new([[-1, 0], [0, -5]]));
 
     assert_eq!(&m1 + m2, Matrix::new([[1, 0], [0, 5]]));
     assert_eq!(m1 + &m2, Matrix::new([[1, 0], [0, 5]]));
@@ -520,6 +560,7 @@ fn test_matrix_add_sub_mul() {
     let m5 = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     assert_eq!(m5[(1,0)], 3);
     assert_eq!(m4 * m5 * 2, Matrix::new([[2, 4], [18, 24]]));
+    assert_eq!(m4 * m5 * 2 / 2, Matrix::new([[1, 2], [9, 12]]));
 
     let mb = Matrix::<num::BigInt, U2, U2>::new([[1.into(), 2.into()], [3.into(), 4.into()]]);
     assert_eq!(mb.clone() * mb, Matrix::new([[7.into(), 10.into()], [15.into(), 22.into()]]));
@@ -736,6 +777,8 @@ fn test_matrix_rows_cols_iter() {
     m[(2,2)] = 3;
     m[(0,2)] = 4;
     assert_eq!(m.dim(), (3, 3));
+    assert_eq!(m.rows(), 3);
+    assert_eq!(m.cols(), 3);
 
     let mut rows = m.rows_iter();
 
