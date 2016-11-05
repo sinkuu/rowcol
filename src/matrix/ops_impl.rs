@@ -356,7 +356,7 @@ fn test_inv() {
                                        [2, 2, 2, 1],
                                        [1, 5, 1, 1]]).map(Ratio::from_integer);
     let mi = m.inverse();
-    assert_eq!((mi * m.determinant()).map(|a| a.to_integer()),
+    assert_eq!((mi * Ratio::from_integer(12)).map(|a| a.to_integer()),
         Matrix::new([
                     [-9, -6, 12, 9],
                     [-1, -2, 0, 5],
