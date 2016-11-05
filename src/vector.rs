@@ -7,7 +7,7 @@ use arrayvec::{self, ArrayVec};
 
 use num;
 
-use std::ops::{Deref, DerefMut, Add, Sub, Mul, Rem, Index, IndexMut};
+use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 use std::slice::Iter as SliceIter;
 use std::slice::IterMut as SliceIterMut;
@@ -353,6 +353,25 @@ impl<T, U, N> Mul<U> for Vector<T, N>
     }
 }
 
+impl<T, U, N> Div<U> for Vector<T, N>
+    where
+        T: Div<U>,
+        U: Clone,
+        N: ArrayLen<T> + ArrayLen<<T as Div<U>>::Output>,
+{
+    type Output = Vector<<T as Div<U>>::Output, N>;
+
+    fn div(self, rhs: U) -> Self::Output {
+        unsafe {
+            let mut arr = mem::uninitialized::<<N as ArrayLen<<T as Div<U>>::Output>>::Array>();
+            for (e, x) in arr.as_mut().into_iter().zip(self) {
+                mem::forget(mem::replace(e, x / rhs.clone()));
+            }
+            Vector::new(arr)
+        }
+    }
+}
+
 #[test]
 fn test_vector_arith() {
     let a = Vector::<i32, U3>::new([1, 2, 3]);
@@ -367,6 +386,9 @@ fn test_vector_arith() {
     assert_eq!(&a - b, a_minus_b);
     assert_eq!(a - &b, a_minus_b);
     assert_eq!(&a - &b, a_minus_b);
+
+    assert_eq!(a * 2, Vector::new([2, 4, 6]));
+    assert_eq!(b / 2, Vector::new([2, 2, 3]));
 }
 
 impl<T, N> IntoIterator for Vector<T, N> where N: ArrayLen<T> {
