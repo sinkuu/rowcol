@@ -17,6 +17,21 @@ use std::mem;
 use vector::{Vector, ArrayLen};
 
 /// A fixed-size matrix allocated on the stack.
+///
+/// ```rust
+/// use rowcol::prelude::*;
+///
+/// let mut m = Matrix::<f32, U2, U2>::new([[1.0, 2.0], [3.0, 4.0]]);
+/// assert_eq!(m.determinant(), 0);
+/// assert_eq!(m.transposed().determinant(), 0);
+///
+/// assert_eq!(m[(0, 0)], 1.0);
+/// m[(0, 0)] = 2.0;
+/// assert_eq!(m, Matrix::new([[2.0, 2.0], [3.0, 4.0]]));
+/// ```
+///
+/// Some operations are provided via traits implemented by Matrix.
+/// Import `prelude` to make them available.
 pub struct Matrix<T, Row, Col>(Vector<Vector<T, Col>, Row>)
     where
         Col: ArrayLen<T>,
