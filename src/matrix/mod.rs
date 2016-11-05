@@ -30,8 +30,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     /// Creates a new matrix.
     ///
     /// ```rust
-    /// # use rowcol::typenum::consts::*;
-    /// # use rowcol::Matrix;
+    /// # use rowcol::prelude::*;
     /// let mat = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     /// ```
     pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
@@ -79,8 +78,7 @@ impl<T, N> Matrix<T, N, N>
     /// Creates an identity matrix. This function is only implemented for square matrix types.
     ///
     /// ```rust
-    /// # use rowcol::typenum::consts::*;
-    /// # use rowcol::Matrix;
+    /// # use rowcol::prelude::*;
     /// let id: Matrix<f32, U3, U3> = Matrix::identity();
     /// ```
     #[inline]
