@@ -1,5 +1,5 @@
 mod ops_impl;
-pub use self::ops_impl::{Cofactor, Determinant};
+pub use self::ops_impl::{Cofactor, Determinant, Inverse};
 
 use typenum::{self, Prod, Same, Mod};
 use typenum::consts::*;
@@ -65,8 +65,28 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 }
 
 impl<T, Row, Col> Matrix<T, Row, Col>
-    where Row: ArrayLen<Vector<T, Col>>, Col: ArrayLen<T>,
+    where
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
 {
+    /// Number of rows and columns in this matrix.
+    #[inline]
+    pub fn dim(&self) -> (usize, usize) {
+        (Row::to_usize(), Col::to_usize())
+    }
+
+    /// Number of rows in this matrix.
+    #[inline]
+    pub fn rows(&self) -> usize {
+        Row::to_usize()
+    }
+
+    /// Number of columns in this matrix.
+    #[inline]
+    pub fn cols(&self) -> usize {
+        Col::to_usize()
+    }
+
     pub fn generate<F>(mut f: F) -> Self where F: FnMut((usize, usize)) -> T {
         unsafe {
             let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<T, Col>>>::Array>();
@@ -85,6 +105,43 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 
     pub fn any<F>(&self, mut pred: F) -> bool where F: FnMut((usize, usize), &T) -> bool {
         self.0.iter().enumerate().any(|(i, col)| col.iter().enumerate().any(|(j, v)| pred((i, j), v)))
+    }
+
+    pub fn map<F, U>(self, mut f: F) -> Matrix<U, Row, Col>
+        where
+            F: FnMut(T) -> U,
+            Row: ArrayLen<Vector<U, Col>>,
+            Col: ArrayLen<U>,
+    {
+        unsafe {
+            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<U, Col>>>::Array>();
+
+            for (srow, ea) in self.0.into_iter().zip(arr.as_mut()) {
+                let mut row = mem::uninitialized::<<Col as ArrayLen<U>>::Array>();
+                for (selem, e) in srow.into_iter().zip(row.as_mut()) {
+                    mem::forget(mem::replace(e, f(selem)));
+                }
+                mem::forget(mem::replace(ea, Vector::new(row)));
+            }
+
+            Matrix(Vector::new(arr))
+        }
+    }
+
+    #[inline]
+    pub unsafe fn get_unchecked(&self, (i, j): (usize, usize)) -> &T {
+        debug_assert!(i < Row::to_usize());
+        debug_assert!(j < Col::to_usize());
+
+        self.0.get_unchecked(i).get_unchecked(j)
+    }
+
+    #[inline]
+    pub unsafe fn get_unchecked_mut(&mut self, (i, j): (usize, usize)) -> &mut T {
+        debug_assert!(i < Row::to_usize());
+        debug_assert!(j < Col::to_usize());
+
+        self.0.get_unchecked_mut(i).get_unchecked_mut(j)
     }
 }
 
@@ -120,31 +177,6 @@ impl<T, Row, Col> From<Vector<T, Prod<Row, Col>>> for Matrix<T, Row, Col>
         }
         debug_assert!(res.is_full());
         Matrix(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
-    }
-}
-
-impl<T, Row, Col> Matrix<T, Row, Col>
-    where
-        Row: ArrayLen<Vector<T, Col>>,
-        Col: ArrayLen<T>,
-{
-    /// Number of rows and columns in this matrix.
-    #[inline]
-    pub fn dim(&self) -> (usize, usize) {
-        (Row::to_usize(), Col::to_usize())
-    }
-
-    /// Number of rows in this matrix.
-    #[inline]
-    pub fn rows(&self) -> usize {
-        Row::to_usize()
-    }
-
-    /// Number of columns in this matrix.
-    #[inline]
-    #[inline]
-    pub fn cols(&self) -> usize {
-        Col::to_usize()
     }
 }
 
