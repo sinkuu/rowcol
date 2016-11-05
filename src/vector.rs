@@ -18,8 +18,7 @@ use std::mem;
 /// A fixed-size vector whose elements are allocated on the stack.
 ///
 /// ```rust
-/// # use rowcol::typenum::consts::*;
-/// # use rowcol::Vector;
+/// # use rowcol::prelude::*;
 ///
 /// let arr = Vector::<i32, U5>::new([1, 2, 3, 4, 5]);
 /// assert_eq!(*arr, [1, 2, 3, 4, 5]);
@@ -28,6 +27,7 @@ use std::mem;
 pub struct Vector<T, N: ArrayLen<T>>(N::Array);
 
 impl<T, N: ArrayLen<T>> Vector<T, N> {
+    /// Creates a vector from an array.
     #[inline]
     pub fn new(array: N::Array) -> Self {
         Vector(array)
@@ -46,31 +46,46 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
         }
     }
 
+    /// Returns the inner array.
     #[inline]
     pub fn into_inner(self) -> N::Array {
         self.0
     }
 
+    /// Returns a slice of entire vector.
     #[inline]
     pub fn as_slice(&self) -> &[T] {
         self.0.as_ref()
     }
 
+    /// Returns a mutable slice of entire vector.
     #[inline]
     pub fn as_slice_mut(&mut self) -> &mut [T] {
         self.0.as_mut()
     }
 
+    /// Returns an iterator over this vector.
     #[inline]
     pub fn iter(&self) -> SliceIter<T> {
         self.as_slice().iter()
     }
 
+    /// Returns an mutable iterator over this vector.
     #[inline]
     pub fn iter_mut(&mut self) -> SliceIterMut<T> {
         self.as_slice_mut().iter_mut()
     }
 
+    /// Splits this vector into chunks of `I`-length vectors. `N % I` must be zero.
+    ///
+    /// ```rust
+    /// # use rowcol::prelude::*;
+    /// let v = Vector::<i32, U4>::new([1, 2, 3, 4]);
+    /// let mut it = v.into_chunks::<U2>();
+    /// assert_eq!(it.next(), Some(Vector::new([1, 2])));
+    /// assert_eq!(it.next(), Some(Vector::new([3, 4])));
+    /// assert_eq!(it.next(), None);
+    /// ```
     #[inline]
     pub fn into_chunks<I>(self) -> VectorChunks<T, N, I>
         where
@@ -89,9 +104,7 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     pub unsafe fn get_unchecked_mut(&mut self, i: usize) -> &mut T {
         self.as_slice_mut().get_unchecked_mut(i)
     }
-}
 
-impl<T, N> Vector<T, N> where N: ArrayLen<T> {
     #[inline]
     pub fn len(&self) -> usize {
         N::to_usize()

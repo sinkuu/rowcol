@@ -76,6 +76,13 @@ impl<T, N> Matrix<T, N, N>
         T: num::Zero + num::One,
         N: ArrayLen<Vector<T, N>> + ArrayLen<T>,
 {
+    /// Creates an identity matrix. This function is only implemented for square matrix types.
+    ///
+    /// ```rust
+    /// # use rowcol::typenum::consts::*;
+    /// # use rowcol::Matrix;
+    /// let id: Matrix<f32, U3, U3> = Matrix::identity();
+    /// ```
     #[inline]
     pub fn identity() -> Self {
         Matrix::generate(|(i, j)| if i == j { T::one() } else { T::zero() })
@@ -105,16 +112,20 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
+    /// Number of rows and columns in this matrix.
     #[inline]
     pub fn dim(&self) -> (usize, usize) {
         (Row::to_usize(), Col::to_usize())
     }
 
+    /// Number of rows in this matrix.
     #[inline]
     pub fn rows(&self) -> usize {
         Row::to_usize()
     }
 
+    /// Number of columns in this matrix.
+    #[inline]
     #[inline]
     pub fn cols(&self) -> usize {
         Col::to_usize()
@@ -127,6 +138,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
         Col: ArrayLen<T> + ArrayLen<Vector<T, Row>>,
 {
+    /// Gives the transpose of this matrix.
     pub fn transposed(&self) -> Matrix<T, Col, Row> {
         let arr: ArrayVec<_> = self.cols_iter().collect();
         Matrix(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
@@ -588,6 +600,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
+    /// Returns an iterator over rows of this matrix.
     #[inline]
     pub fn rows_iter(&self) -> RowsIter<T, Row, Col> {
         RowsIter(&self.0, 0, Col::to_usize())
@@ -600,6 +613,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
+    /// Returns an iterator over columns of this matrix.
     #[inline]
     pub fn cols_iter(&self) -> ColsIter<T, Row, Col> {
         ColsIter(&self.0, 0, Row::to_usize())
