@@ -12,6 +12,7 @@ use std::ops::{Add, Sub, Mul, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 use std::fmt::{Debug, Formatter};
 use std::fmt::Result as FmtResult;
+use std::mem;
 
 use vector::{Vector, ArrayLen};
 
@@ -345,24 +346,19 @@ impl<T, U, Row, Col> Mul<U> for Matrix<T, Row, Col>
 impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
     where
         T: Mul + Clone,
-        Row: Mul<Col> + ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as Mul>::Output, Col>>,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as Mul>::Output, Col>>,
         Col: ArrayLen<T> + ArrayLen<<T as Mul>::Output>,
-        Prod<Row, Col>: ArrayLen<<T as Mul>::Output> + Rem<Col>,
-        Mod<Prod<Row, Col>, Col>: Same<U0>,
 {
     type Output = Matrix<<T as Mul>::Output, Row, Col>;
 
     fn mul(self, rhs: T) -> Self::Output {
-        let mut arr = ArrayVec::new();
-
-        for row in self.0 {
-            for x in row {
-                arr.push(x * rhs.clone());
+        unsafe {
+            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<<T as Mul>::Output, Col>>>::Array>();
+            for (e, row) in arr.as_mut().into_iter().zip(self.0) {
+                mem::forget(mem::replace(e, row * rhs.clone()));
             }
+            Matrix(Vector::new(arr))
         }
-
-        debug_assert!(arr.is_full());
-        Matrix::from(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
     }
 }
 
@@ -381,20 +377,20 @@ impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     type Output = Matrix<Prod<T, T>, LRow, RCol>;
 
     fn mul(self, rhs: Matrix<T, N, RCol>) -> Self::Output {
-        let mut res = ArrayVec::new();
+        unsafe {
+            let mut arr = mem::uninitialized::<<LRow as ArrayLen<Vector<T, RCol>>>::Array>();
 
-        for lrow in self.rows_iter() {
-            for rcol in rhs.cols_iter() {
-                let s = lrow.iter().cloned().zip(rcol.into_iter())
-                    .map(|(a, b)| a.clone() * b)
-                    .fold(T::zero(), Add::add);
-                res.push(s);
+            for (lrow, ea) in self.0.into_iter().zip(arr.as_mut()) {
+                let mut row = mem::uninitialized::<<RCol as ArrayLen<T>>::Array>();
+                for (rcol, e) in rhs.cols_iter().zip(row.as_mut()) {
+                    let v = lrow.iter().cloned().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add);
+                    mem::forget(mem::replace(e, v));
+                }
+                mem::forget(mem::replace(ea, Vector::new(row)));
             }
+
+            Matrix(Vector::new(arr))
         }
-
-        debug_assert!(res.is_full());
-
-        Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
     }
 }
 

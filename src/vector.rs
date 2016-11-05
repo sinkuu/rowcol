@@ -7,7 +7,7 @@ use arrayvec::{self, ArrayVec};
 
 use num;
 
-use std::ops::{Deref, DerefMut, Add, Sub, Rem, Index, IndexMut};
+use std::ops::{Deref, DerefMut, Add, Sub, Mul, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 use std::slice::Iter as SliceIter;
 use std::slice::IterMut as SliceIterMut;
@@ -333,6 +333,25 @@ impl_vector_arith!(&T T: Add, add);
 impl_vector_arith!(&T T: Sub, sub);
 impl_vector_arith!(&T &T: Add, add);
 impl_vector_arith!(&T &T: Sub, sub);
+
+impl<T, U, N> Mul<U> for Vector<T, N>
+    where
+        T: Mul<U>,
+        U: Clone,
+        N: ArrayLen<T> + ArrayLen<<T as Mul<U>>::Output>,
+{
+    type Output = Vector<<T as Mul<U>>::Output, N>;
+
+    fn mul(self, rhs: U) -> Self::Output {
+        unsafe {
+            let mut arr = mem::uninitialized::<<N as ArrayLen<<T as Mul<U>>::Output>>::Array>();
+            for (e, x) in arr.as_mut().into_iter().zip(self) {
+                mem::forget(mem::replace(e, x * rhs.clone()));
+            }
+            Vector::new(arr)
+        }
+    }
+}
 
 #[test]
 fn test_vector_arith() {
