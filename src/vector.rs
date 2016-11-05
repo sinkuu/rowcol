@@ -10,6 +10,9 @@ use num;
 use std::ops::{Deref, DerefMut, Add, Sub, Rem, Index, IndexMut};
 use std::marker::PhantomData;
 use std::slice::Iter as SliceIter;
+use std::slice::IterMut as SliceIterMut;
+use std::mem;
+
 
 /// A fixed-size vector whose elements are allocated on the stack.
 ///
@@ -31,8 +34,6 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
 
     #[inline]
     pub fn generate<F>(mut f: F) -> Self where F: FnMut(usize) -> T {
-        use std::mem;
-
         unsafe {
             let mut arr = mem::uninitialized::<N::Array>();
 
@@ -62,6 +63,11 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     #[inline]
     pub fn iter(&self) -> SliceIter<T> {
         self.as_slice().iter()
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> SliceIterMut<T> {
+        self.as_slice_mut().iter_mut()
     }
 
     #[inline]
@@ -103,8 +109,15 @@ impl<T, N> Clone for Vector<T, N>
 {
     #[inline]
     fn clone(&self) -> Self {
-        let new: ArrayVec<_> = self.iter().cloned().collect();
-        Vector(new.into_inner().unwrap_or_else(|_| unreachable!()))
+        unsafe {
+            let mut arr = mem::uninitialized::<N::Array>();
+
+            for (e, x) in arr.as_mut().into_iter().zip(self.iter().cloned()) {
+                mem::forget(mem::replace(e, x));
+            }
+
+            Vector(arr)
+        }
     }
 }
 
@@ -226,21 +239,21 @@ macro_rules! impl_vector_arith {
     (T T : $op_trait:ident, $op_fn:ident) => {
         impl<T, U, N> $op_trait<Vector<U, N>> for Vector<T, N>
             where
-                N: ArrayLen<T>,
                 T: $op_trait<U>,
                 N: ArrayLen<T> + ArrayLen<U> + ArrayLen<<T as $op_trait<U>>::Output>,
         {
             type Output = Vector<<T as $op_trait<U>>::Output, N>;
 
             fn $op_fn(self, other: Vector<U, N>) -> Self::Output {
-                let mut res = ArrayVec::new();
+                unsafe {
+                    let mut arr = mem::uninitialized::<<N as ArrayLen<<T as $op_trait<U>>::Output>>::Array>();
 
-                for (a, b) in ArrayVec::from(self.into_inner()).into_iter().zip(ArrayVec::from(other.into_inner())) {
-                    res.push($op_trait::$op_fn(a, b));
+                    for (e, (a, b)) in arr.as_mut().into_iter().zip(self.into_iter().zip(other.into_iter())) {
+                        mem::forget(mem::replace(e, $op_trait::$op_fn(a, b)));
+                    }
+
+                    Vector(arr)
                 }
-
-                debug_assert!(res.is_full());
-                Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!()))
             }
         }
     };
@@ -248,21 +261,21 @@ macro_rules! impl_vector_arith {
     (T &T : $op_trait:ident, $op_fn:ident) => {
         impl<'a, T, U, N> $op_trait<&'a Vector<U, N>> for Vector<T, N>
             where
-                N: ArrayLen<T>,
                 T: $op_trait<&'a U>,
                 N: ArrayLen<T> + ArrayLen<U> + ArrayLen<<T as $op_trait<&'a U>>::Output>,
         {
             type Output = Vector<<T as $op_trait<&'a U>>::Output, N>;
 
             fn $op_fn(self, other: &'a Vector<U, N>) -> Self::Output {
-                let mut res = ArrayVec::new();
+                unsafe {
+                    let mut arr = mem::uninitialized::<<N as ArrayLen<<T as $op_trait<&'a U>>::Output>>::Array>();
 
-                for (a, b) in ArrayVec::from(self.into_inner()).into_iter().zip(other.as_slice()) {
-                    res.push($op_trait::$op_fn(a, b));
+                    for (e, (a, b)) in arr.as_mut().into_iter().zip(self.into_iter().zip(other.iter())) {
+                        mem::forget(mem::replace(e, $op_trait::$op_fn(a, b)));
+                    }
+
+                    Vector(arr)
                 }
-
-                debug_assert!(res.is_full());
-                Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!()))
             }
         }
     };
@@ -270,21 +283,21 @@ macro_rules! impl_vector_arith {
     (&T T : $op_trait:ident, $op_fn:ident) => {
         impl<'a, T, U, N> $op_trait<Vector<U, N>> for &'a Vector<T, N>
             where
-                N: ArrayLen<T>,
                 &'a T: $op_trait<U>,
                 N: ArrayLen<T> + ArrayLen<U> + ArrayLen<<&'a T as $op_trait<U>>::Output>,
         {
             type Output = Vector<<&'a T as $op_trait<U>>::Output, N>;
 
             fn $op_fn(self, other: Vector<U, N>) -> Self::Output {
-                let mut res = ArrayVec::new();
+                unsafe {
+                    let mut arr = mem::uninitialized::<<N as ArrayLen<<&'a T as $op_trait<U>>::Output>>::Array>();
 
-                for (a, b) in self.as_slice().into_iter().zip(ArrayVec::from(other.into_inner())) {
-                    res.push($op_trait::$op_fn(a, b));
+                    for (e, (a, b)) in arr.as_mut().into_iter().zip(self.iter().zip(other)) {
+                        mem::forget(mem::replace(e, $op_trait::$op_fn(a, b)));
+                    }
+
+                    Vector(arr)
                 }
-
-                debug_assert!(res.is_full());
-                Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!()))
             }
         }
     };
@@ -292,21 +305,21 @@ macro_rules! impl_vector_arith {
     (&T &T : $op_trait:ident, $op_fn:ident) => {
         impl<'a, 'b, T, U, N> $op_trait<&'a Vector<U, N>> for &'b Vector<T, N>
             where
-                N: ArrayLen<T>,
                 &'b T: $op_trait<&'a U>,
                 N: ArrayLen<T> + ArrayLen<U> + ArrayLen<<&'b T as $op_trait<&'a U>>::Output>,
         {
             type Output = Vector<<&'b T as $op_trait<&'a U>>::Output, N>;
 
             fn $op_fn(self, other: &'a Vector<U, N>) -> Self::Output {
-                let mut res = ArrayVec::new();
+                unsafe {
+                    let mut arr = mem::uninitialized::<<N as ArrayLen<<&'b T as $op_trait<&'a U>>::Output>>::Array>();
 
-                for (a, b) in self.as_slice().into_iter().zip(other.as_slice()) {
-                    res.push($op_trait::$op_fn(a, b));
+                    for (e, (a, b)) in arr.as_mut().into_iter().zip(self.iter().zip(other.iter())) {
+                        mem::forget(mem::replace(e, $op_trait::$op_fn(a, b)));
+                    }
+
+                    Vector(arr)
                 }
-
-                debug_assert!(res.is_full());
-                Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!()))
             }
         }
     };

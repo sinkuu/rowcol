@@ -248,23 +248,14 @@ macro_rules! impl_matrix_arith {
         impl<T, Row, Col> $op_trait<Matrix<T, Row, Col>> for Matrix<T, Row, Col>
             where
                 T: $op_trait,
-                Row: Mul<Col> + ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as $op_trait>::Output, Col>>,
+                Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as $op_trait>::Output, Col>>,
                 Col: ArrayLen<T> + ArrayLen<<T as $op_trait>::Output>,
-                Prod<Row, Col>: ArrayLen<<T as $op_trait>::Output> + Rem<Col>,
-                Mod<Prod<Row, Col>, Col>: Same<U0>,
         {
             type Output = Matrix<<T as $op_trait>::Output, Row, Col>;
 
+            #[inline]
             fn $op_fn(self, rhs: Matrix<T, Row, Col>) -> Self::Output {
-                let mut res = ArrayVec::new();
-
-                for (xr, yr) in self.0.into_iter().zip(rhs.0.into_iter()) {
-                    for (x, y) in xr.into_iter().zip(yr) {
-                        res.push($op_trait::$op_fn(x, y));
-                    }
-                }
-
-                Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
+                Matrix($op_trait::$op_fn(self.0, rhs.0))
             }
         }
     };
@@ -273,24 +264,14 @@ macro_rules! impl_matrix_arith {
         impl<'a, T, Row, Col> $op_trait<Matrix<T, Row, Col>> for &'a Matrix<T, Row, Col>
             where
                 &'a T: $op_trait<T>,
-                Row: Mul<Col> +
-                    ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<&'a T as $op_trait<T>>::Output, Col>>,
+                Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<&'a T as $op_trait<T>>::Output, Col>>,
                 Col: ArrayLen<T> + ArrayLen<<&'a T as $op_trait<T>>::Output>,
-                Prod<Row, Col>: ArrayLen<<&'a T as $op_trait<T>>::Output> + Rem<Col>,
-                Mod<Prod<Row, Col>, Col>: Same<U0>,
         {
             type Output = Matrix<<&'a T as $op_trait<T>>::Output, Row, Col>;
 
+            #[inline]
             fn $op_fn(self, rhs: Matrix<T, Row, Col>) -> Self::Output {
-                let mut res = ArrayVec::new();
-
-                for (xr, yr) in self.0.as_slice().iter().zip(rhs.0.into_iter()) {
-                    for (x, y) in xr.iter().zip(yr.into_iter()) {
-                        res.push($op_trait::$op_fn(x, y));
-                    }
-                }
-
-                Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
+                Matrix($op_trait::$op_fn(&self.0, rhs.0))
             }
         }
     };
@@ -299,24 +280,14 @@ macro_rules! impl_matrix_arith {
         impl<'a, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for Matrix<T, Row, Col>
             where
                 T: $op_trait<&'a T>,
-                Row: Mul<Col> +
-                    ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as $op_trait<&'a T>>::Output, Col>>,
+                Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as $op_trait<&'a T>>::Output, Col>>,
                 Col: ArrayLen<T> + ArrayLen<<T as $op_trait<&'a T>>::Output>,
-                Prod<Row, Col>: ArrayLen<<T as $op_trait<&'a T>>::Output> + Rem<Col>,
-                Mod<Prod<Row, Col>, Col>: Same<U0>,
         {
             type Output = Matrix<<T as $op_trait<&'a T>>::Output, Row, Col>;
 
+            #[inline]
             fn $op_fn(self, rhs: &'a Matrix<T, Row, Col>) -> Self::Output {
-                let mut res = ArrayVec::new();
-
-                for (xr, yr) in self.0.into_iter().zip(rhs.0.as_slice()) {
-                    for (x, y) in xr.into_iter().zip(yr.iter()) {
-                        res.push($op_trait::$op_fn(x, y));
-                    }
-                }
-
-                Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
+                Matrix($op_trait::$op_fn(self.0, &rhs.0))
             }
         }
     };
@@ -325,24 +296,15 @@ macro_rules! impl_matrix_arith {
         impl<'a, 'b, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for &'b Matrix<T, Row, Col>
             where
                 &'b T: $op_trait<&'a T>,
-                Row: Mul<Col> + ArrayLen<Vector<T, Col>> +
+                Row: ArrayLen<Vector<T, Col>> +
                      ArrayLen<Vector<<&'b T as $op_trait<&'a T>>::Output, Col>>,
                 Col: ArrayLen<T> + ArrayLen<<&'b T as $op_trait<&'a T>>::Output>,
-                Prod<Row, Col>: ArrayLen<<&'b T as $op_trait<&'a T>>::Output> + Rem<Col>,
-                Mod<Prod<Row, Col>, Col>: Same<U0>,
         {
             type Output = Matrix<<&'b T as $op_trait<&'a T>>::Output, Row, Col>;
 
+            #[inline]
             fn $op_fn(self, rhs: &'a Matrix<T, Row, Col>) -> Self::Output {
-                let mut res = ArrayVec::new();
-
-                for (xr, yr) in self.0.as_slice().iter().zip(rhs.0.as_slice()) {
-                    for (x, y) in xr.iter().zip(yr.iter()) {
-                        res.push($op_trait::$op_fn(x, y));
-                    }
-                }
-
-                Matrix::from(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
+                Matrix($op_trait::$op_fn(&self.0, &rhs.0))
             }
         }
     };
