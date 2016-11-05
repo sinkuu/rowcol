@@ -37,12 +37,48 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
         -> Matrix<T, Row, Col>
     {
-        let mut arr = ArrayVec::new();
-        for row in Vector::<<Col as ArrayLen<T>>::Array, Row>::new(rows) {
-            arr.push(Vector::<T, Col>::new(row));
+        unsafe {
+            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<T, Col>>>::Array>();
+            for (e, row) in arr.as_mut().into_iter().zip(ArrayVec::from(rows)) {
+                mem::forget(mem::replace(e, Vector::new(row)));
+            }
+            Matrix(Vector::new(arr))
         }
-        debug_assert!(arr.is_full());
-        Matrix(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
+    }
+}
+
+impl<T, Row, Col> Matrix<T, Row, Col>
+    where Row: ArrayLen<Vector<T, Col>>, Col: ArrayLen<T>,
+{
+    pub fn generate<F>(mut f: F) -> Self where F: FnMut((usize, usize)) -> T {
+        unsafe {
+            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<T, Col>>>::Array>();
+            for (i, e) in arr.as_mut().into_iter().enumerate() {
+                mem::forget(mem::replace(e, Vector::generate(|j| f((i, j)))));
+            }
+            Matrix(Vector::new(arr))
+        }
+    }
+
+    pub fn all<F>(&self, mut pred: F) -> bool where F: FnMut((usize, usize), &T) -> bool {
+        self.0.iter()
+            .enumerate()
+            .all(|(i, col)| col.iter().enumerate().all(|(j, v)| pred((i, j), v)))
+    }
+
+    pub fn any<F>(&self, mut pred: F) -> bool where F: FnMut((usize, usize), &T) -> bool {
+        self.0.iter().enumerate().any(|(i, col)| col.iter().enumerate().any(|(j, v)| pred((i, j), v)))
+    }
+}
+
+impl<T, N> Matrix<T, N, N>
+    where
+        T: num::Zero + num::One,
+        N: ArrayLen<Vector<T, N>> + ArrayLen<T>,
+{
+    #[inline]
+    pub fn identity() -> Self {
+        Matrix::generate(|(i, j)| if i == j { T::one() } else { T::zero() })
     }
 }
 
@@ -244,6 +280,66 @@ impl<T, Row, Col, IRow, ICol> IndexMut<(PhantomData<IRow>, PhantomData<ICol>)> f
     }
 }
 
+impl<T, Row, Col> num::Zero for Matrix<T, Row, Col>
+    where
+        T: num::Zero,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    #[inline]
+    fn zero() -> Self {
+        Matrix::generate(|_| T::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0.iter().all(|col| col.iter().all(|v| v.is_zero()))
+    }
+}
+
+#[test]
+fn test_zero() {
+    use num::Zero;
+    let mut m = Matrix::<f32, U3, U3>::zero();
+    assert!(m.is_zero());
+    m[(0,0)] = 1.0;
+    assert!(!m.is_zero());
+}
+
+impl<T, Row, Col> num::Bounded for Matrix<T, Row, Col>
+    where
+        T: num::Bounded,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    #[inline]
+    fn min_value() -> Self {
+        Matrix::generate(|_| T::min_value())
+    }
+
+    #[inline]
+    fn max_value() -> Self {
+        Matrix::generate(|_| T::max_value())
+    }
+}
+
+#[test]
+fn test_bounded() {
+    use num::Bounded;
+    assert_eq!(Matrix::<u32, U2, U2>::min_value(), Matrix::new([[0, 0], [0, 0]]));
+}
+
+/// Creates an identity matrix, equivalent to `Matrix::identity`. Implemented for square matrix types.
+impl<T, N> num::One for Matrix<T, N, N>
+    where
+        T: num::Zero + num::One + Clone + Mul<T, Output = T>,
+        N: ArrayLen<T> + ArrayLen<Vector<T, N>>,
+{
+    #[inline]
+    fn one() -> Self {
+        Matrix::identity()
+    }
+}
+
 macro_rules! impl_matrix_arith {
     (T T : $op_trait:ident, $op_fn: ident) => {
         impl<T, Row, Col> $op_trait<Matrix<T, Row, Col>> for Matrix<T, Row, Col>
@@ -365,14 +461,10 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
 impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     where
         T: num::Zero + Add<T, Output = T> + Mul<T, Output = T> + Clone,
-        N: Mul<RCol> +
-           ArrayLen<Vector<T, RCol>> +
-           ArrayLen<T> +
-           for<'a> ArrayLen<&'a T>,
+        N: ArrayLen<Vector<T, RCol>> +
+           ArrayLen<T>,
         RCol: ArrayLen<T>,
-        LRow: ArrayLen<Vector<T, RCol>> + ArrayLen<Vector<T, N>> + Mul<RCol>,
-        Prod<LRow, RCol>: ArrayLen<T> + Rem<RCol>,
-        Mod<Prod<LRow, RCol>, RCol>: Same<U0>,
+        LRow: ArrayLen<Vector<T, RCol>> + ArrayLen<Vector<T, N>>,
 {
     type Output = Matrix<Prod<T, T>, LRow, RCol>;
 
@@ -421,8 +513,9 @@ fn test_matrix_add_sub_mul() {
     assert_eq!(m1 - &m2, Matrix::new([[1, 0], [0, 3]]));
     assert_eq!(&m1 - &m2, Matrix::new([[1, 0], [0, 3]]));
 
-    let id = Matrix::new([[1, 0], [0, 1]]);
+    let id = Matrix::identity();
     assert_eq!(m1, m1 * id);
+    assert_eq!(m1 * num::pow::pow(id, 20), m1);
 
     let m5 = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     assert_eq!(m5[(1,0)], 3);
@@ -567,13 +660,13 @@ impl<'a, T: 'a, Row, Col> Iterator
             let s = self.1;
             self.1 += 1;
 
-            let mut arr = ArrayVec::new();
-            for x in self.0.iter().map(|row| row.iter().nth(s).unwrap()) { // FIXME
-                arr.push(x.clone());
+            unsafe {
+                let mut arr = mem::uninitialized::<<Row as ArrayLen<T>>::Array>();
+                for (e, x) in arr.as_mut().into_iter().zip(self.0.iter().map(|row| &row.as_slice()[s])) {
+                    mem::forget(mem::replace(e, x.clone()));
+                }
+                Some(Vector::new(arr))
             }
-            debug_assert!(arr.is_full());
-
-            Some(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
         } else {
             None
         }
