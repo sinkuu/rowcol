@@ -10,6 +10,12 @@ use arrayvec::ArrayVec;
 
 use std::ops::{Add, Mul, Sub, Div, Neg};
 
+macro_rules! idx {
+    ($mat:ident ( $i:ident, $j:ident )) => {
+        $mat[($i::new(), $j::new())].clone()
+    }
+}
+
 pub trait Determinant {
     type Output;
 
@@ -29,7 +35,7 @@ impl<T> Determinant for Matrix<T, U1, U1> where T: Clone {
 
     #[inline]
     fn determinant(&self) -> T {
-        self[(0, 0)].clone()
+        idx!(self(U0, U0))
     }
 }
 
@@ -40,8 +46,8 @@ impl<T> Determinant for Matrix<T, U2, U2>
 
     #[inline]
     fn determinant(&self) -> T {
-        self[(0, 0)].clone() * self[(1,1)].clone()
-            - self[(1, 0)].clone() * self[(0, 1)].clone()
+        idx!(self(U0,U0)) * idx!(self(U1,U1))
+            - idx!(self(U1, U0)) * idx!(self(U0, U1))
     }
 }
 
@@ -52,12 +58,12 @@ impl<T> Determinant for Matrix<T, U3, U3>
 
     #[inline]
     fn determinant(&self) -> T {
-        self[(0, 0)].clone() * self[(1, 1)].clone() * self[(2, 2)].clone() +
-            self[(0, 1)].clone() * self[(1, 2)].clone() * self[(2, 0)].clone() +
-            self[(0, 2)].clone() * self[(1, 0)].clone() * self[(2, 1)].clone() -
-            self[(0, 2)].clone() * self[(1, 1)].clone() * self[(2, 0)].clone() -
-            self[(0, 1)].clone() * self[(1, 0)].clone() * self[(2, 2)].clone() -
-            self[(0, 0)].clone() * self[(1, 2)].clone() * self[(2, 1)].clone()
+        idx!(self(U0,U0)) * idx!(self(U1,U1)) * idx!(self(U2,U2)) +
+            idx!(self(U0,U1)) * idx!(self(U1,U2)) * idx!(self(U2,U0)) +
+            idx!(self(U0,U2)) * idx!(self(U1,U0)) * idx!(self(U2,U1)) -
+            idx!(self(U0,U2)) * idx!(self(U1,U1)) * idx!(self(U2,U0)) -
+            idx!(self(U0,U1)) * idx!(self(U1,U0)) * idx!(self(U2,U2)) -
+            idx!(self(U0,U0)) * idx!(self(U1,U2)) * idx!(self(U2,U1))
     }
 }
 
@@ -80,7 +86,7 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
     fn determinant(&self) -> T {
         let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
         (0 .. n)
-            .map(|i| self[(i, 0)].clone() * self.cofactor(i, 0))
+            .map(|i| unsafe { self.get_unchecked((i, 0)).clone() } * self.cofactor(i, 0))
             .fold(T::zero(), Add::add)
     }
 }
@@ -91,9 +97,6 @@ impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
 
     #[inline]
     fn cofactor(&self, i: usize, j: usize) -> T {
-        assert!(i < 2);
-        assert!(j < 2);
-
         let sgn = num::pow::pow(-T::one(), i + j);
 
         sgn * self[(1 - i, 1 - j)].clone()
@@ -229,7 +232,7 @@ impl<T> Inverse for Matrix<T, U1, U1> where T: Clone + num::One + Div<T> {
 
     #[inline]
     fn inverse(&self) -> Self::Output {
-        Matrix::new([[T::one() / self[(0, 0)].clone()]])
+        Matrix::new([[T::one() / idx!(self(U0,U0))]])
     }
 }
 
@@ -244,7 +247,8 @@ impl<T> Inverse for Matrix<T, U2, U2>
     #[inline]
     fn inverse(&self) -> Self::Output {
         let det = self.determinant();
-        Matrix::<T, U2, U2>::new([[self[(1,1)].clone(), -self[(0,1)].clone()], [-self[(1,0)].clone(), self[(0,0)].clone()]]) / det
+        Matrix::<T, U2, U2>::new([[idx!(self(U1,U1)), -idx!(self(U0,U1))],
+                                 [-idx!(self(U1,U0)), idx!(self(U0,U0))]]) / det
     }
 }
 
@@ -257,17 +261,12 @@ impl<T> Inverse for Matrix<T, U3, U3>
 
     #[inline]
     fn inverse(&self) -> Self::Output {
-        use std::marker::PhantomData;
-
         let det = self.determinant();
 
         macro_rules! ms {
-            (@i $mat:ident : ($i:ident, $j:ident)) => {
-                $mat[(PhantomData::<$i>, PhantomData::<$j>)].clone()
-            };
             ($mat:ident : $( ($i1:ident, $j1:ident) * ($i2:ident, $j2:ident) - ($i3:ident, $j3:ident) * ($i4:ident, $j4:ident) ),*) => {
                 [$(
-                    ms!(@i $mat : ($i1, $j1)) * ms!(@i $mat : ($i2, $j2)) - ms!(@i $mat : ($i3, $j3)) * ms!(@i $mat : ($i4, $j4)),
+                    idx!($mat($i1, $j1)) * idx!($mat($i2, $j2)) - idx!($mat($i3, $j3)) * idx!($mat($i4, $j4)),
                 )*]
             };
         }
@@ -347,7 +346,7 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
 }
 
 #[test]
-fn test_inv() {
+fn test_inverse() {
     use num::rational::Ratio;
 
     let m = Matrix::<i32, U4, U4>::new([

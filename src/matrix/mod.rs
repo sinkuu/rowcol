@@ -1,7 +1,7 @@
 mod ops_impl;
 pub use self::ops_impl::{Cofactor, Determinant, Inverse};
 
-use typenum::{self, Prod, Same, Mod};
+use typenum::{self, Prod, Same, Mod, UInt};
 use typenum::consts::*;
 
 use arrayvec::ArrayVec;
@@ -9,7 +9,6 @@ use arrayvec::ArrayVec;
 use num;
 
 use std::ops::{Add, Sub, Mul, Div, Neg, Rem, Index, IndexMut};
-use std::marker::PhantomData;
 use std::fmt::{Debug, Formatter};
 use std::fmt::Result as FmtResult;
 use std::mem;
@@ -290,27 +289,6 @@ impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
     }
 }
 
-impl<T, Row, Col, IRow, ICol> Index<(PhantomData<IRow>, PhantomData<ICol>)> for Matrix<T, Row, Col>
-    where
-        Row: ArrayLen<Vector<T, Col>>,
-        Col: ArrayLen<T>,
-        IRow: typenum::Unsigned + typenum::Cmp<Row>,
-        ICol: typenum::Unsigned + typenum::Cmp<Col>,
-        typenum::Compare<IRow, Row>: Same<typenum::Less>,
-        typenum::Compare<ICol, Col>: Same<typenum::Less>,
-{
-    type Output = T;
-
-    #[inline]
-    fn index(&self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &T {
-        unsafe {
-            self.0
-                .get_unchecked(IRow::to_usize())
-                .get_unchecked(ICol::to_usize())
-        }
-    }
-}
-
 impl<T, Row, Col> IndexMut<(usize, usize)> for Matrix<T, Row, Col>
     where
         Row: ArrayLen<Vector<T, Col>>,
@@ -322,20 +300,165 @@ impl<T, Row, Col> IndexMut<(usize, usize)> for Matrix<T, Row, Col>
     }
 }
 
-impl<T, Row, Col, IRow, ICol> IndexMut<(PhantomData<IRow>, PhantomData<ICol>)> for Matrix<T, Row, Col>
+impl<T, Row, Col, UIRow, BIRow, UICol, BICol> Index<(UInt<UIRow, BIRow>, UInt<UICol, BICol>)> for Matrix<T, Row, Col>
     where
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
-        IRow: typenum::Unsigned + typenum::Cmp<Row>,
-        ICol: typenum::Unsigned + typenum::Cmp<Col>,
-        typenum::Compare<IRow, Row>: Same<typenum::Less>,
-        typenum::Compare<ICol, Col>: Same<typenum::Less>,
+        UIRow: typenum::Unsigned,
+        UICol: typenum::Unsigned,
+        BIRow: typenum::Bit,
+        BICol: typenum::Bit,
+        UInt<UIRow, BIRow>: typenum::Unsigned + typenum::Cmp<Row>,
+        UInt<UICol, BICol>: typenum::Unsigned + typenum::Cmp<Col>,
+        typenum::Compare<UInt<UIRow, BIRow>, Row>: Same<typenum::Less>,
+        typenum::Compare<UInt<UICol, BICol>, Col>: Same<typenum::Less>,
+{
+    type Output = T;
+
+    #[inline]
+    fn index(&self, _: (UInt<UIRow, BIRow>, UInt<UICol, BICol>)) -> &T {
+        unsafe {
+            self.0.get_unchecked(<UInt<UIRow, BIRow> as typenum::Unsigned>::to_usize())
+                .get_unchecked(<UInt<UICol, BICol> as typenum::Unsigned>::to_usize())
+        }
+    }
+}
+
+impl<T, Row, Col, UIRow, BIRow, UICol, BICol> IndexMut<(UInt<UIRow, BIRow>, UInt<UICol, BICol>)> for Matrix<T, Row, Col>
+    where
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+        UIRow: typenum::Unsigned,
+        UICol: typenum::Unsigned,
+        BIRow: typenum::Bit,
+        BICol: typenum::Bit,
+        UInt<UIRow, BIRow>: typenum::Unsigned + typenum::Cmp<Row>,
+        UInt<UICol, BICol>: typenum::Unsigned + typenum::Cmp<Col>,
+        typenum::Compare<UInt<UIRow, BIRow>, Row>: Same<typenum::Less>,
+        typenum::Compare<UInt<UICol, BICol>, Col>: Same<typenum::Less>,
 {
     #[inline]
-    fn index_mut(&mut self, _: (PhantomData<IRow>, PhantomData<ICol>)) -> &mut T {
+    fn index_mut(&mut self, _: (UInt<UIRow, BIRow>, UInt<UICol, BICol>)) -> &mut T {
         unsafe {
-            self.0.get_unchecked_mut(IRow::to_usize())
-                .get_unchecked_mut(ICol::to_usize())
+            self.0.get_unchecked_mut(<UInt<UIRow, BIRow> as typenum::Unsigned>::to_usize())
+                .get_unchecked_mut(<UInt<UICol, BICol> as typenum::Unsigned>::to_usize())
+        }
+    }
+}
+
+// U0 = UTerm
+impl<T, Row, Col> Index<(U0, U0)> for Matrix<T, Row, Col>
+    where
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+        U0: typenum::Cmp<Row> + typenum::Cmp<Col>,
+        typenum::Compare<U0, Row>: Same<typenum::Less>,
+        typenum::Compare<U0, Col>: Same<typenum::Less>,
+{
+    type Output = T;
+
+    fn index(&self, _: (U0, U0)) -> &T {
+        unsafe {
+            self.0.get_unchecked(0).get_unchecked(0)
+        }
+    }
+}
+
+impl<T, Row, Col> IndexMut<(U0, U0)> for Matrix<T, Row, Col>
+    where
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+        U0: typenum::Cmp<Row> + typenum::Cmp<Col>,
+        typenum::Compare<U0, Row>: Same<typenum::Less>,
+        typenum::Compare<U0, Col>: Same<typenum::Less>,
+{
+    fn index_mut(&mut self, _: (U0, U0)) -> &mut T {
+        unsafe {
+            self.0.get_unchecked_mut(0).get_unchecked_mut(0)
+        }
+    }
+}
+
+impl<T, Row, Col, UIRow, BIRow> Index<(UInt<UIRow, BIRow>, U0)> for Matrix<T, Row, Col>
+    where
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+        UIRow: typenum::Unsigned,
+        BIRow: typenum::Bit,
+        UInt<UIRow, BIRow>: typenum::Unsigned + typenum::Cmp<Row>,
+        U0: typenum::Cmp<Col>,
+        typenum::Compare<UInt<UIRow, BIRow>, Row>: Same<typenum::Less>,
+        typenum::Compare<U0, Col>: Same<typenum::Less>,
+{
+    type Output = T;
+
+    #[inline]
+    fn index(&self, _: (UInt<UIRow, BIRow>, U0)) -> &T {
+        unsafe {
+            self.0.get_unchecked(<UInt<UIRow, BIRow> as typenum::Unsigned>::to_usize())
+                .get_unchecked(0)
+        }
+    }
+}
+
+impl<T, Row, Col, UIRow, BIRow> IndexMut<(UInt<UIRow, BIRow>, U0)> for Matrix<T, Row, Col>
+    where
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+        UIRow: typenum::Unsigned,
+        BIRow: typenum::Bit,
+        UInt<UIRow, BIRow>: typenum::Unsigned + typenum::Cmp<Row>,
+        U0: typenum::Cmp<Col>,
+        typenum::Compare<UInt<UIRow, BIRow>, Row>: Same<typenum::Less>,
+        typenum::Compare<U0, Col>: Same<typenum::Less>,
+{
+    #[inline]
+    fn index_mut(&mut self, _: (UInt<UIRow, BIRow>, U0)) -> &mut T {
+        unsafe {
+            self.0.get_unchecked_mut(<UInt<UIRow, BIRow> as typenum::Unsigned>::to_usize())
+                .get_unchecked_mut(0)
+        }
+    }
+}
+
+impl<T, Row, Col, UICol, BICol> Index<(U0, UInt<UICol, BICol>)> for Matrix<T, Row, Col>
+    where
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+        UICol: typenum::Unsigned,
+        BICol: typenum::Bit,
+        U0: typenum::Cmp<Row>,
+        UInt<UICol, BICol>: typenum::Unsigned + typenum::Cmp<Col>,
+        typenum::Compare<U0, Row>: Same<typenum::Less>,
+        typenum::Compare<UInt<UICol, BICol>, Col>: Same<typenum::Less>,
+{
+    type Output = T;
+
+    #[inline]
+    fn index(&self, _: (U0, UInt<UICol, BICol>)) -> &T {
+        unsafe {
+            self.0.get_unchecked(0)
+                .get_unchecked(<UInt<UICol, BICol> as typenum::Unsigned>::to_usize())
+        }
+    }
+}
+
+impl<T, Row, Col, UICol, BICol> IndexMut<(U0, UInt<UICol, BICol>)> for Matrix<T, Row, Col>
+    where
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+        UICol: typenum::Unsigned,
+        BICol: typenum::Bit,
+        U0: typenum::Cmp<Row>,
+        UInt<UICol, BICol>: typenum::Unsigned + typenum::Cmp<Col>,
+        typenum::Compare<U0, Row>: Same<typenum::Less>,
+        typenum::Compare<UInt<UICol, BICol>, Col>: Same<typenum::Less>,
+{
+    #[inline]
+    fn index_mut(&mut self, _: (U0, UInt<UICol, BICol>)) -> &mut T {
+        unsafe {
+            self.0.get_unchecked_mut(0)
+                .get_unchecked_mut(<UInt<UICol, BICol> as typenum::Unsigned>::to_usize())
         }
     }
 }
