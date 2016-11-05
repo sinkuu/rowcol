@@ -21,17 +21,20 @@ use vector::{Vector, ArrayLen};
 /// ```rust
 /// use rowcol::prelude::*;
 ///
-/// let mut m = Matrix::<f32, U2, U2>::new([[1.0, 2.0], [3.0, 4.0]]);
-/// assert_eq!(m.determinant(), 0);
-/// assert_eq!(m.transposed().determinant(), 0);
+/// let mut m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+/// assert_eq!(m.determinant(), -2);
+/// assert_eq!(m.transposed().determinant(), -2);
 ///
-/// assert_eq!(m[(0, 0)], 1.0);
-/// m[(0, 0)] = 2.0;
-/// assert_eq!(m, Matrix::new([[2.0, 2.0], [3.0, 4.0]]));
+/// assert_eq!(m[(0, 0)], 1);
+/// m[(0, 0)] = 2;
+/// assert_eq!(m, Matrix::new([[2, 2], [3, 4]]));
 /// ```
 ///
-/// Some operations are provided via traits implemented by Matrix.
-/// Import `prelude` to make them available.
+/// [`prelude`] provides typenum constants (`U1`, `U2`, ...), operation traits (e.g.,
+/// [`Determinant`]), and alias for `Matrix`.
+///
+/// [`prelude`]: ../prelude/index.html
+/// [`Determinant`]: ../prelude/trait.Determinant.html
 pub struct Matrix<T, Row, Col>(Vector<Vector<T, Col>, Row>)
     where
         Col: ArrayLen<T>,
