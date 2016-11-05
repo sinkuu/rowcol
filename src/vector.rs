@@ -6,6 +6,7 @@ use typenum::type_operators::Same;
 use arrayvec::{self, ArrayVec};
 
 use num;
+use num::Float;
 
 use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Rem, Index, IndexMut};
 use std::marker::PhantomData;
@@ -389,6 +390,28 @@ fn test_vector_arith() {
 
     assert_eq!(a * 2, Vector::new([2, 4, 6]));
     assert_eq!(b / 2, Vector::new([2, 2, 3]));
+}
+
+impl<T, N> Vector<T, N>
+    where
+        T: Float + Clone,
+        N: ArrayLen<T>,
+{
+    pub fn norm(&self) -> T {
+        let prod = self.iter().cloned().map(|x| x.powi(2)).fold(T::zero(), Add::add);
+        prod.sqrt()
+    }
+
+    pub fn normalized(&self) -> Vector<T, N> {
+        self.clone() / self.norm()
+    }
+}
+
+#[test]
+fn test_norm() {
+    let v = Vector::<f32, U2>::new([3.0, 4.0]);
+    assert_eq!(v.norm(), 5.0);
+    assert_eq!(v.normalized(), Vector::new([0.6, 0.8]));
 }
 
 impl<T, N> IntoIterator for Vector<T, N> where N: ArrayLen<T> {
