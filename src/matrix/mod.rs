@@ -746,14 +746,13 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
     }
 }
 
-impl<T, U, Row, Col> MulAssign<U> for Matrix<T, Row, Col>
+impl<T, Row, Col> MulAssign<T> for Matrix<T, Row, Col>
     where
-        T: MulAssign<U>,
-        U: Clone,
+        T: MulAssign + Clone,
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
-    fn mul_assign(&mut self, rhs: U) {
+    fn mul_assign(&mut self, rhs: T) {
         for row in self.0.iter_mut() {
             for a in row.iter_mut() {
                 *a *= rhs.clone();
@@ -778,6 +777,42 @@ impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
                 lrow.iter().cloned().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
             }).collect()
         }).collect())
+    }
+}
+
+impl<T, N, LRow, RCol> MulAssign<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
+    where
+        T: num::Zero + Add<T, Output = T> + Mul<T, Output = T> + Clone,
+        N: ArrayLen<Vector<T, RCol>> +
+           ArrayLen<T>,
+        RCol: ArrayLen<T>,
+        LRow: ArrayLen<Vector<T, RCol>> + ArrayLen<Vector<T, N>>,
+{
+    fn mul_assign(&mut self, rhs: Matrix<T, N, RCol>) {
+        *self = Matrix(self.0.clone().into_iter().map(|lrow| {
+            rhs.cols_iter().map(|rcol| {
+                lrow.iter().cloned().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
+            }).collect()
+        }).collect())
+    }
+}
+
+impl<T, Row, Col> Mul<Vector<T, Col>> for Matrix<T, Row, Col>
+    where
+        T: Mul<T, Output = T> + Add<T, Output = T> + num::Zero + Clone,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
+        Col: ArrayLen<T>,
+{
+    type Output = Vector<T, Row>;
+
+    fn mul(self, rhs: Vector<T, Col>) -> Self::Output {
+        self.0.into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .zip(rhs.iter().cloned())
+                    .map(|(a, b)| a * b.clone()).fold(T::zero(), Add::add)
+            })
+            .collect()
     }
 }
 
@@ -893,7 +928,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     /// Returns an iterator over columns of this matrix.
     #[inline]
     pub fn cols_iter(&self) -> ColsIter<T, Row, Col> {
-        ColsIter(&self.0, 0, Row::to_usize())
+        ColsIter(&self.0, 0, Col::to_usize())
     }
 }
 
