@@ -733,6 +733,8 @@ impl<T, Row, Col> Neg for Matrix<T, Row, Col>
     }
 }
 
+// matrix * x
+
 impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
     where
         T: Mul + Clone,
@@ -743,6 +745,19 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
 
     fn mul(self, rhs: T) -> Self::Output {
         Matrix(self.0.into_iter().map(|row| row * rhs.clone()).collect())
+    }
+}
+
+impl<'a, T, Row, Col> Mul<&'a T> for Matrix<T, Row, Col>
+    where
+        T: Mul<&'a T>,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as Mul<&'a T>>::Output, Col>>,
+        Col: ArrayLen<T> + ArrayLen<<T as Mul<&'a T>>::Output>,
+{
+    type Output = Matrix<<T as Mul<&'a T>>::Output, Row, Col>;
+
+    fn mul(self, rhs: &'a T) -> Self::Output {
+        Matrix(self.0.into_iter().map(|row| row * rhs).collect())
     }
 }
 
@@ -760,6 +775,23 @@ impl<T, Row, Col> MulAssign<T> for Matrix<T, Row, Col>
         }
     }
 }
+
+impl<'a, T, Row, Col> MulAssign<&'a T> for Matrix<T, Row, Col>
+    where
+        T: MulAssign<&'a T> + Clone,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    fn mul_assign(&mut self, rhs: T) {
+        for row in self.0.iter_mut() {
+            for a in row.iter_mut() {
+                *a *= rhs;
+            }
+        }
+    }
+}
+
+// matrix * matrix
 
 impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     where
@@ -797,6 +829,8 @@ impl<T, N, LRow, RCol> MulAssign<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     }
 }
 
+// matrix * vector
+
 impl<T, Row, Col> Mul<Vector<T, Col>> for Matrix<T, Row, Col>
     where
         T: Mul<T, Output = T> + Add<T, Output = T> + num::Zero + Clone,
@@ -815,6 +849,8 @@ impl<T, Row, Col> Mul<Vector<T, Col>> for Matrix<T, Row, Col>
             .collect()
     }
 }
+
+// matrix / x
 
 impl<T, U, Row, Col> Div<U> for Matrix<T, Row, Col>
     where
