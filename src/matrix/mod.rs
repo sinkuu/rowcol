@@ -1,6 +1,9 @@
 pub mod ops;
 pub use self::ops::{Cofactor, Determinant, Inverse};
 
+pub mod iter;
+use self::iter::*;
+
 use typenum::{self, Prod, Same, Mod, UInt};
 use typenum::consts::*;
 
@@ -21,10 +24,8 @@ use vector::{Vector, ArrayLen};
 ///
 /// let mut m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
 ///
-/// assert_eq!(m.determinant(), -2);
 /// assert_eq!(m.transposed().determinant(), -2);
-/// let m2 = m * 2;
-/// assert_eq!(m2.determinant(), -8);
+/// assert_eq!((m * 2).determinant(), -8);
 ///
 /// assert_eq!(m[(0, 0)], 1);
 /// m[(0, 0)] = 2;
@@ -586,6 +587,7 @@ fn test_bounded() {
 impl<T, N> num::One for Matrix<T, N, N>
     where
         T: num::Zero + num::One + Clone + Mul<T, Output = T>,
+        for<'a> &'a T: Mul<&'a T, Output = T>,
         N: ArrayLen<T> + ArrayLen<Vector<T, N>>,
 {
     #[inline]
@@ -737,14 +739,14 @@ impl<T, Row, Col> Neg for Matrix<T, Row, Col>
 
 impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
     where
-        T: Mul + Clone,
-        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as Mul>::Output, Col>>,
-        Col: ArrayLen<T> + ArrayLen<<T as Mul>::Output>,
+        T: for<'a> Mul<&'a T, Output = T>,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
 {
-    type Output = Matrix<<T as Mul>::Output, Row, Col>;
+    type Output = Matrix<T, Row, Col>;
 
     fn mul(self, rhs: T) -> Self::Output {
-        Matrix(self.0.into_iter().map(|row| row * rhs.clone()).collect())
+        Matrix(self.0.into_iter().map(|row| row * &rhs).collect())
     }
 }
 
@@ -776,64 +778,75 @@ impl<T, Row, Col> MulAssign<T> for Matrix<T, Row, Col>
     }
 }
 
-impl<'a, T, Row, Col> MulAssign<&'a T> for Matrix<T, Row, Col>
-    where
-        T: MulAssign<&'a T> + Clone,
-        Row: ArrayLen<Vector<T, Col>>,
-        Col: ArrayLen<T>,
-{
-    fn mul_assign(&mut self, rhs: &'a T) {
-        for row in self.0.iter_mut() {
-            for a in row.iter_mut() {
-                *a *= rhs;
-            }
-        }
-    }
-}
-
 // matrix * matrix
 
 impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     where
-        T: num::Zero + Add<T, Output = T> + Mul<T, Output = T> + Clone,
+        T: num::Zero + Add<T, Output = T>,
+        for<'a> &'a T: Mul<&'a T, Output = T>,
         N: ArrayLen<Vector<T, RCol>> +
            ArrayLen<T>,
         RCol: ArrayLen<T>,
         LRow: ArrayLen<Vector<T, RCol>> + ArrayLen<Vector<T, N>>,
 {
-    type Output = Matrix<Prod<T, T>, LRow, RCol>;
+    type Output = Matrix<T, LRow, RCol>;
 
     fn mul(self, rhs: Matrix<T, N, RCol>) -> Self::Output {
         Matrix(self.0.into_iter().map(|lrow| {
-            rhs.cols_iter().map(|rcol| {
-                lrow.iter().cloned().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
+            rhs.cols_iter_ref().map(|rcol| {
+                lrow.iter().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
             }).collect()
         }).collect())
     }
 }
 
-impl<T, N, LRow, RCol> MulAssign<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
+impl<'a, T, N, LRow, RCol> Mul<&'a Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     where
-        T: num::Zero + Add<T, Output = T> + Mul<T, Output = T> + Clone,
+        T: num::Zero + Add<T, Output = T>,
+        for<'b> &'b T: Mul<&'a T, Output = T>,
         N: ArrayLen<Vector<T, RCol>> +
            ArrayLen<T>,
         RCol: ArrayLen<T>,
         LRow: ArrayLen<Vector<T, RCol>> + ArrayLen<Vector<T, N>>,
 {
-    fn mul_assign(&mut self, rhs: Matrix<T, N, RCol>) {
-        *self = Matrix(self.0.clone().into_iter().map(|lrow| {
-            rhs.cols_iter().map(|rcol| {
-                lrow.iter().cloned().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
+    type Output = Matrix<T, LRow, RCol>;
+
+    fn mul(self, rhs: &'a Matrix<T, N, RCol>) -> Self::Output {
+        Matrix(self.0.into_iter().map(|lrow| {
+            rhs.cols_iter_ref().map(|rcol| {
+                lrow.iter().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
             }).collect()
         }).collect())
     }
+}
+
+impl<T, N> MulAssign<Matrix<T, N, N>> for Matrix<T, N, N>
+    where
+        T: num::Zero + Add<T, Output = T>,
+        for<'a> &'a T: Mul<&'a T, Output = T>,
+        N: ArrayLen<Vector<T, N>> + ArrayLen<T>,
+{
+    fn mul_assign(&mut self, rhs: Matrix<T, N, N>) {
+        *self = Matrix(self.0.iter().map(|lrow| {
+            rhs.cols_iter_ref().map(|rcol| {
+                lrow.iter().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
+            }).collect()
+        }).collect())
+    }
+}
+
+#[test]
+fn test_mul_assign_mat() {
+    let mut m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    m *= Matrix::<i32, U2, U2>::new([[5, 6], [7, 8]]);
+    assert_eq!(m, Matrix::new([[19, 22], [43, 50]]));
 }
 
 // matrix * vector
 
 impl<T, Row, Col> Mul<Vector<T, Col>> for Matrix<T, Row, Col>
     where
-        T: Mul<T, Output = T> + Add<T, Output = T> + num::Zero + Clone,
+        T: for<'a> Mul<&'a T, Output = T> + Add<T, Output = T> + num::Zero,
         Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
         Col: ArrayLen<T>,
 {
@@ -843,8 +856,27 @@ impl<T, Row, Col> Mul<Vector<T, Col>> for Matrix<T, Row, Col>
         self.0.into_iter()
             .map(|row| {
                 row.into_iter()
-                    .zip(rhs.iter().cloned())
-                    .map(|(a, b)| a * b.clone()).fold(T::zero(), Add::add)
+                    .zip(rhs.iter())
+                    .map(|(a, b)| a * b).fold(T::zero(), Add::add)
+            })
+            .collect()
+    }
+}
+
+impl<'a, T, Row, Col> Mul<&'a Vector<T, Col>> for Matrix<T, Row, Col>
+    where
+        T: Mul<&'a T, Output = T> + Add<T, Output = T> + num::Zero,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
+        Col: ArrayLen<T>,
+{
+    type Output = Vector<T, Row>;
+
+    fn mul(self, rhs: &'a Vector<T, Col>) -> Self::Output {
+        self.0.into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .zip(rhs.iter())
+                    .map(|(a, b)| a * b).fold(T::zero(), Add::add)
             })
             .collect()
     }
@@ -852,30 +884,43 @@ impl<T, Row, Col> Mul<Vector<T, Col>> for Matrix<T, Row, Col>
 
 // matrix / x
 
-impl<T, U, Row, Col> Div<U> for Matrix<T, Row, Col>
+impl<T, Row, Col> Div<T> for Matrix<T, Row, Col>
     where
-        T: Div<U>,
-        U: Clone,
-        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as Div<U>>::Output, Col>>,
-        Col: ArrayLen<T> + ArrayLen<<T as Div<U>>::Output>,
+        T: for<'a> Div<&'a T, Output = T>,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
 {
-    type Output = Matrix<<T as Div<U>>::Output, Row, Col>;
+    type Output = Matrix<T, Row, Col>;
 
-    fn div(self, rhs: U) -> Self::Output {
+    fn div(self, rhs: T) -> Self::Output {
         Matrix(self.0.into_iter().map(|row| {
-            row / rhs.clone()
+            row / &rhs
         }).collect())
     }
 }
 
-impl<T, U, Row, Col> DivAssign<U> for Matrix<T, Row, Col>
+impl<'a, T, Row, Col> Div<&'a T> for Matrix<T, Row, Col>
     where
-        T: DivAssign<U>,
-        U: Clone,
+        T: Div<&'a T, Output = T>,
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
-    fn div_assign(&mut self, rhs: U) {
+    type Output = Matrix<T, Row, Col>;
+
+    fn div(self, rhs: &'a T) -> Self::Output {
+        Matrix(self.0.into_iter().map(|row| {
+            row / &rhs
+        }).collect())
+    }
+}
+
+impl<T, Row, Col> DivAssign<T> for Matrix<T, Row, Col>
+    where
+        T: DivAssign + Clone,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    fn div_assign(&mut self, rhs: T) {
         for row in self.0.iter_mut() {
             for a in row.iter_mut() {
                 *a /= rhs.clone();
@@ -886,7 +931,7 @@ impl<T, U, Row, Col> DivAssign<U> for Matrix<T, Row, Col>
 
 
 #[test]
-fn test_matrix_add_sub_mul() {
+fn test_matrix_arith() {
     let mut m1 = Matrix::<i32, U2, U2>::default();
     m1[(1,1)] = 4;
     m1[(0,0)] = 1;
@@ -921,27 +966,19 @@ fn test_matrix_add_sub_mul() {
     assert_eq!(m5[(1,0)], 3);
     assert_eq!((m5 + m5 - m5)[(1,0)], 3);
     assert_eq!(m4 * m5 * 2, Matrix::new([[2], [18]]));
-    assert_eq!(m4 * m5 * 2 / 2, Matrix::new([[1], [9]]));
+    assert_eq!(m4 * &m5 * 2 / 2, Matrix::new([[1], [9]]));
+    assert_eq!(m5 * &Vector::<i32, U1>::new([2]), Vector::new([2, 6]));
+
+    let mut m = m4;
+    m *= 2;
+    m = m * &2;
+    m /= 2;
+    m = m / &2;
+    assert_eq!(m, m4);
 
     let mb = Matrix::<num::BigInt, U2, U2>::new([[1.into(), 2.into()], [3.into(), 4.into()]]);
     assert_eq!(mb.clone() * mb, Matrix::new([[7.into(), 10.into()], [15.into(), 22.into()]]));
 }
-
-
-/*
-impl<T, N> Matrix<T, N, N>
-    where
-        T: One + Div,
-        N: Mul<Col>,
-        <N as Mul<N>>::Output: ArrayLen<T>
-{
-    pub fn inverse(&self) -> Option<Matrix<T, N, N>> {
-        let inv_det = T::one() / self.determinant();
-    }
-}
-*/
-
-// TODO: `into_rows` and `into_cols`
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
@@ -952,219 +989,30 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     /// Returns an iterator over rows of this matrix.
     #[inline]
     pub fn rows_iter(&self) -> RowsIter<T, Row, Col> {
-        RowsIter(&self.0, 0, Row::to_usize())
+        RowsIter::new(&self.0)
+    }
+
+    /// Returns an iterator over columns of this matrix.
+    #[inline]
+    pub fn cols_iter(&self) -> ColsIter<T, Row, Col> {
+        ColsIter::new(&self.0)
     }
 }
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
-        T: Clone,
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
-    /// Returns an iterator over columns of this matrix.
+    /// Returns an iterator over rows of this matrix by reference.
     #[inline]
-    pub fn cols_iter(&self) -> ColsIter<T, Row, Col> {
-        ColsIter(&self.0, 0, Col::to_usize())
+    pub fn rows_iter_ref(&self) -> RowsIterRef<T, Row, Col> {
+        RowsIterRef::new(&self.0)
+    }
+
+    /// Returns an iterator over columns of this matrix by reference.
+    #[inline]
+    pub fn cols_iter_ref(&self) -> ColsIterRef<T, Row, Col> {
+        ColsIterRef::new(&self.0)
     }
 }
-
-pub struct RowsIter<'a, T: 'a, Row, Col>
-    (&'a Vector<Vector<T, Col>, Row>, usize, usize)
-    where
-        Row: ArrayLen<Vector<T, Col>> + 'a,
-        Col: ArrayLen<T> + 'a;
-
-impl<'a, T: 'a, Row, Col> Iterator
-    for RowsIter<'a, T, Row, Col>
-    where
-        T: Clone,
-        Row: ArrayLen<Vector<T, Col>>,
-        Col: ArrayLen<T>,
-{
-    type Item = Vector<T, Col>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.1 < self.2 {
-            let s = self.1;
-            let ret = self.0.as_ref()[s].clone();
-            self.1 += 1;
-            Some(ret)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let s = Row::to_usize() - self.1;
-        (s, Some(s))
-    }
-
-    #[inline]
-    fn count(self) -> usize {
-        Row::to_usize() - self.1
-    }
-
-    #[inline]
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.1 += n;
-        self.next()
-    }
-}
-
-impl<'a, T: 'a, Row, Col> ExactSizeIterator for RowsIter<'a, T, Row, Col>
-    where
-        T: Clone,
-        Row: ArrayLen<Vector<T, Col>>,
-        Col: ArrayLen<T>,
-{
-    // avoiding an assert in the provided method
-    #[inline]
-    fn len(&self) -> usize {
-        Row::to_usize() - self.1
-    }
-}
-
-impl<'a, T: 'a, Row, Col> DoubleEndedIterator for RowsIter<'a, T, Row, Col>
-    where
-        T: Clone,
-        Row: ArrayLen<Vector<T, Col>>,
-        Col: ArrayLen<T>,
-{
-    fn next_back(&mut self) -> Option<Vector<T, Col>> {
-        if self.1 < self.2 {
-            let s = self.2;
-            let ret = self.0.as_ref()[s-1].clone();
-            self.2 -= 1;
-            Some(ret)
-        } else {
-            None
-        }
-    }
-}
-
-pub struct ColsIter<'a, T: 'a, Row, Col>
-    (&'a Vector<Vector<T, Col>, Row>, usize, usize)
-    where
-        Row: ArrayLen<Vector<T, Col>> + 'a,
-        Col: ArrayLen<T> + 'a;
-
-impl<'a, T: 'a, Row, Col> Iterator
-    for ColsIter<'a, T, Row, Col>
-    where
-        T: Clone,
-        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
-        Col: ArrayLen<T>,
-{
-    type Item = Vector<T, Row>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        debug_assert!(self.2 <= Col::to_usize());
-        if self.1 < self.2 {
-            let s = self.1;
-            self.1 += 1;
-
-            let v = self.0.iter().map(|row| unsafe { row.as_slice().get_unchecked(s).clone() }).collect();
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let s = Col::to_usize() - self.1;
-        (s, Some(s))
-    }
-
-    #[inline]
-    fn count(self) -> usize {
-        Col::to_usize() - self.1
-    }
-
-    #[inline]
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.1 += n;
-        self.next()
-    }
-}
-
-impl<'a, T: 'a, Row, Col> ExactSizeIterator for ColsIter<'a, T, Row, Col>
-    where
-        T: Clone,
-        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
-        Col: ArrayLen<T>,
-{
-    // avoiding an assert in the provided method
-    #[inline]
-    fn len(&self) -> usize {
-        Col::to_usize() - self.1
-    }
-}
-
-impl<'a, T: 'a, Row, Col> DoubleEndedIterator
-    for ColsIter<'a, T, Row, Col>
-    where
-        T: Clone,
-        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
-        Col: ArrayLen<T>,
-{
-    fn next_back(&mut self) -> Option<Vector<T, Row>> {
-        if self.1 < self.2 {
-            let s = self.2;
-            self.2 -= 1;
-
-            Some(self.0.iter().map(|row| row.as_ref()[s-1].clone()).collect())
-        } else {
-            None
-        }
-    }
-}
-
-#[test]
-fn test_matrix_rows_cols_iter() {
-    let mut m: Matrix<i32, U2, U3> = Default::default();
-    m[(0,0)] = 1;
-    m[(1,1)] = 2;
-    m[(1,2)] = 3;
-    m[(0,2)] = 4;
-    assert_eq!(m.dim(), (2, 3));
-    assert_eq!(m.rows(), 2);
-    assert_eq!(m.cols(), 3);
-
-    let mut rows = m.rows_iter();
-
-    assert_eq!(rows.len(), 2);
-    assert!(rows.next().unwrap().iter().eq(&[1, 0, 4]));
-    assert!(rows.next().unwrap().iter().eq(&[0, 2, 3]));
-    assert_eq!(rows.next(), None);
-    assert_eq!(rows.count(), 0);
-
-    let mut rows = m.rows_iter().rev();
-
-    assert_eq!(rows.len(), 2);
-    assert!(rows.next().unwrap().iter().eq(&[0, 2, 3]));
-    assert!(rows.next().unwrap().iter().eq(&[1, 0, 4]));
-    assert_eq!(rows.next(), None);
-    assert_eq!(rows.count(), 0);
-
-    let mut cols = m.cols_iter();
-
-    assert_eq!(cols.len(), 3);
-    assert!(cols.next().unwrap().iter().eq(&[1, 0]));
-    assert!(cols.next().unwrap().iter().eq(&[0, 2]));
-    assert!(cols.next().unwrap().iter().eq(&[4, 3]));
-    assert_eq!(cols.next(), None);
-    assert_eq!(cols.count(), 0);
-
-    let mut cols = m.cols_iter().rev();
-
-    assert_eq!(cols.len(), 3);
-    assert!(cols.next().unwrap().iter().eq(&[4, 3]));
-    assert!(cols.next().unwrap().iter().eq(&[0, 2]));
-    assert!(cols.next().unwrap().iter().eq(&[1, 0]));
-    assert_eq!(cols.next(), None);
-    assert_eq!(cols.count(), 0);
-}
-

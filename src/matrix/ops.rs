@@ -11,7 +11,7 @@ use std::ops::{Add, Mul, Sub, Div, Neg};
 
 macro_rules! idx {
     ($mat:ident ( $i:ident, $j:ident )) => {
-        $mat[($i::new(), $j::new())].clone()
+        &$mat[($i::new(), $j::new())]
     }
 }
 
@@ -34,12 +34,14 @@ impl<T> Determinant for Matrix<T, U1, U1> where T: Clone {
 
     #[inline]
     fn determinant(&self) -> T {
-        idx!(self(U0, U0))
+        idx!(self(U0, U0)).clone()
     }
 }
 
 impl<T> Determinant for Matrix<T, U2, U2>
-    where T: num::Signed + Clone
+    where
+        T: Sub<T, Output = T>,
+        for<'a> &'a T: Mul<&'a T, Output = T>
 {
     type Output = T;
 
@@ -51,7 +53,9 @@ impl<T> Determinant for Matrix<T, U2, U2>
 }
 
 impl<T> Determinant for Matrix<T, U3, U3>
-    where T: num::Signed + Clone
+    where
+        T: Mul<T, Output = T> + for<'a> Mul<&'a T, Output = T> + Add<T, Output = T> + Sub<T, Output = T>,
+        for<'a> &'a T: Mul<&'a T, Output = T>,
 {
     type Output = T;
 
@@ -74,7 +78,8 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
         Ba: typenum::Bit,
         Bb: typenum::Bit,
         Bc: typenum::Bit,
-        T: num::Signed + Clone,
+        T: num::Signed + Clone + for<'a> Mul<&'a T, Output = T>,
+        for<'a> &'a T: Mul<&'a T, Output = T>,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
             Sub<U1> + for<'a> ArrayLen<&'a T>,
@@ -91,7 +96,7 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
     }
 }
 
-impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
+impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone + for<'a> Mul<&'a T, Output = T>
 {
     type Output = T;
 
@@ -99,14 +104,15 @@ impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
     fn cofactor(&self, i: usize, j: usize) -> T {
         let sgn = num::pow::pow(-T::one(), i + j);
 
-        sgn * self[(1 - i, 1 - j)].clone()
+        sgn * &self[(1 - i, 1 - j)]
     }
 }
 
 impl<T> Cofactor for Matrix<T, U3, U3>
     where
         U3: Mul + for<'a> ArrayLen<&'a T>,
-        T: num::Signed + Clone,
+        T: num::Signed + Clone + for<'a> Mul<&'a T, Output = T>,
+        for<'a> &'a T: Mul<&'a T, Output = T>,
 {
     type Output = T;
 
@@ -131,7 +137,8 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
         Bb: typenum::Bit,
         Bc: typenum::Bit,
 
-        T: num::Signed + Clone,
+        T: num::Signed + Clone + for<'a> Mul<&'a T, Output = T>,
+        for<'a> &'a T: Mul<&'a T, Output = T>,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
             Sub<U1> + for<'a> ArrayLen<&'a T>,
@@ -203,8 +210,8 @@ pub trait Inverse {
     fn inverse(&self) -> Self::Output;
 }
 
-impl<T> Inverse for Matrix<T, U1, U1> where T: Clone + num::One + Div<T> {
-    type Output = Matrix<<T as Div>::Output, U1, U1>;
+impl<T> Inverse for Matrix<T, U1, U1> where T: Clone + num::One + for<'a> Div<&'a T, Output = T> {
+    type Output = Matrix<T, U1, U1>;
 
     #[inline]
     fn inverse(&self) -> Self::Output {
@@ -215,22 +222,23 @@ impl<T> Inverse for Matrix<T, U1, U1> where T: Clone + num::One + Div<T> {
 impl<T> Inverse for Matrix<T, U2, U2>
     where
         Matrix<T, U2, U2>: Determinant<Output = T>,
-        T: Div<T, Output = T> + Neg<Output = T> + Clone,
+        T: for<'a> Div<&'a T, Output = T> + Neg<Output = T> + Clone,
 {
     type Output = Matrix<T, U2, U2>;
 
     #[inline]
     fn inverse(&self) -> Self::Output {
         let det = self.determinant();
-        Matrix::<T, U2, U2>::new([[idx!(self(U1,U1)), -idx!(self(U0,U1))],
-                                 [-idx!(self(U1,U0)), idx!(self(U0,U0))]]) / det
+        Matrix::<T, U2, U2>::new([[idx!(self(U1,U1)).clone(), -idx!(self(U0,U1)).clone()],
+                                 [-idx!(self(U1,U0)).clone(), idx!(self(U0,U0)).clone()]]) / det
     }
 }
 
 impl<T> Inverse for Matrix<T, U3, U3>
     where
         Matrix<T, U3, U3>: Determinant<Output = T>,
-        T: Mul<T, Output = T> + Div<T, Output = T> + Sub<T, Output = T> + Clone,
+        T: Mul<T, Output = T> + for<'a> Div<&'a T, Output = T> + Sub<T, Output = T> + Clone,
+        for<'a> &'a T: Mul<&'a T, Output = T>,
 {
     type Output = Matrix<T, U3, U3>;
 
@@ -264,10 +272,12 @@ impl<T> Inverse for Matrix<T, U3, U3>
 #[test]
 fn test_hard_coded_inverse() {
     use num::rational::Ratio;
+    use num::{BigInt, ToPrimitive};
 
-    let m = Matrix::<i32, U2, U2>::new([[1, 5], [2, 4]]).map(Ratio::from_integer);
+    let m = Matrix::<i32, U2, U2>::new([[1, 5], [2, 4]]).map(|x| Ratio::from_integer(BigInt::from(x)));
     let mi = m.inverse();
-    assert_eq!((mi * Ratio::from_integer(6)).map(|a| a.to_integer()), Matrix::new([[-4, 5], [2, -1]]));
+    assert_eq!((mi * Ratio::from_integer(BigInt::from(6))).map(|a| a.to_integer().to_i32().unwrap()),
+        Matrix::new([[-4, 5], [2, -1]]));
 
     let m = Matrix::<i32, U3, U3>::new([[1, 5, 3], [2, 4, 1], [2, 2, 2]]).map(Ratio::from_integer);
     let mi = m.inverse();
@@ -276,6 +286,7 @@ fn test_hard_coded_inverse() {
 }
 
 // {Row, Col} > 3
+// TODO: specialize for Matrix<T, U4, U4>
 impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>
     where
         U: typenum::Unsigned,
@@ -283,7 +294,8 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
         Bb: typenum::Bit,
         Bc: typenum::Bit,
 
-        T: num::Signed + Clone + ,
+        T: Clone +  for<'a> Div<&'a T, Output = T> + num::Signed,
+        for<'a> &'a T: Mul<&'a T, Output = T> + Sub<T, Output = T>,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             typenum::Unsigned + ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>>,
 {
@@ -296,12 +308,12 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
         let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
 
         for i in 0..n {
-            let rcp = T::one() / unsafe { mat.get_unchecked((i, i)).clone() };
+            let rcp = T::one() / unsafe { mat.get_unchecked((i, i)) };
 
             for j in 0..n {
                 unsafe {
-                    *mat.get_unchecked_mut((i, j)) = mat.get_unchecked((i, j)).clone() * rcp.clone();
-                    *inv.get_unchecked_mut((i, j)) = inv.get_unchecked((i, j)).clone() * rcp.clone();
+                    *mat.get_unchecked_mut((i, j)) = mat.get_unchecked((i, j)) * &rcp;
+                    *inv.get_unchecked_mut((i, j)) = inv.get_unchecked((i, j)) * &rcp;
                 }
             }
 
@@ -312,11 +324,11 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
                 for k in 0..n {
                     unsafe {
                         *mat.get_unchecked_mut((j, k)) =
-                            mat.get_unchecked((j, k)).clone() -
-                            mat.get_unchecked((i, k)).clone() * a.clone();
+                            mat.get_unchecked((j, k)) -
+                            mat.get_unchecked((i, k)) * &a;
                         *inv.get_unchecked_mut((j, k)) =
-                            inv.get_unchecked((j, k)).clone() -
-                            inv.get_unchecked((i, k)).clone() * a.clone();
+                            inv.get_unchecked((j, k)) -
+                            inv.get_unchecked((i, k)) * &a;
                     }
                 }
             }
