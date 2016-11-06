@@ -133,12 +133,12 @@ impl<T, N> Copy for Vector<T, N>
 
 impl<T, N> Default for Vector<T, N>
     where
+        T: Default,
         N: ArrayLen<T>,
-        N::Array: Default
 {
     #[inline]
     fn default() -> Self {
-        Vector(Default::default())
+        Vector::generate(|_| T::default())
     }
 }
 

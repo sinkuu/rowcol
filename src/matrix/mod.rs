@@ -8,7 +8,7 @@ use num;
 
 use std::ops::{Add, Sub, Mul, Div, Neg, Rem,
     AddAssign, SubAssign, MulAssign, DivAssign, Index, IndexMut};
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::fmt::Result as FmtResult;
 
 use vector::{Vector, ArrayLen};
@@ -179,10 +179,9 @@ fn test_transposed() {
 
 impl<T, Row, Col> Default for Matrix<T, Row, Col>
     where
+        T: Default,
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
-        <Col as ArrayLen<T>>::Array: Default,
-        <Row as ArrayLen<Vector<T, Col>>>::Array: Default,
 {
     #[inline]
     fn default() -> Self {
@@ -253,6 +252,98 @@ impl<T, Row, Col> Debug for Matrix<T, Row, Col>
 fn test_debug_matrix() {
     let m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     assert_eq!(format!("{:?}", m), "Matrix[[1, 2], [3, 4]]");
+}
+
+// This implementation allocates.
+#[cfg(feature = "std")]
+impl<T, Row, Col> Display for Matrix<T, Row, Col>
+    where
+        T: Display,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<String, Col>>,
+        Col: ArrayLen<T> + ArrayLen<String> + ArrayLen<usize>,
+{
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        #[cfg(feature = "unicode_width")]
+        fn str_len(s: &str) -> usize {
+            use unicode_width::UnicodeWidthStr;
+            s.width()
+        }
+        #[cfg(not(feature = "unicode_width"))]
+        fn str_len(s: &str) -> usize {
+            s.len()
+        }
+
+        let mut ws = Vector::<usize, Col>::default();
+        let mut hs = Vector::<usize, Col>::default();
+
+        let ss: Vector<Vector<String, Col>, Row> = (0..Row::to_usize()).map(|i| {
+            (0..Col::to_usize()).map(|j| {
+                let s = format!("{}", self[(i, j)]);
+
+                let len = s.lines().map(|l| str_len(l)).max().unwrap_or(0);
+                if ws[j] < len { ws[j] = len; }
+
+                let lin = s.lines().count();
+                if hs[i] < lin { hs[i] = lin; }
+
+                s
+            }).collect()
+        }).collect();
+
+        for (i, row) in ss.into_iter().enumerate() {
+            use std::fmt::Write;
+
+            for n in 0..hs[i] {
+                try!(f.write_char(
+                    if i == 0 && n == 0 {
+                        '⎡'
+                    } else if i == Row::to_usize()-1 && n == hs[i]-1 {
+                        '⎣'
+                    } else {
+                        '⎢'
+                    }));
+
+                for (j, col) in row.iter().enumerate() {
+                    let maxlen = col.lines().map(|l| str_len(l)).max().unwrap_or(0);
+                    let leftpad = (ws[j] - maxlen) / 2;
+
+                    for _ in 0..leftpad { try!(f.write_char(' ')); }
+
+                    let line = col.lines().nth(n).unwrap_or("");
+                    try!(f.write_str(line));
+
+                    let rightpad = ws[j] - str_len(line) - leftpad +
+                         if j != Col::to_usize()-1 { 1 } else { 0 };
+                    for _ in 0..rightpad { try!(f.write_char(' ')); }
+                }
+
+                try!(f.write_str(
+                    if i == 0 && n == 0{
+                        "⎤\n"
+                    } else if i == Row::to_usize()-1 && n == hs[i]-1 {
+                        "⎦"
+                    } else {
+                        "⎥\n"
+                    }));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn test_display() {
+    let m = Matrix::<i32, U2, U2>::new([[111, 2], [3, 4]]);
+    assert_eq!(format!("{}", m), "⎡111 2⎤\n\
+                                  ⎣ 3  4⎦");
+    let m2 = Matrix::new([[1, 2], [3, 4]]);
+    assert_eq!(format!("{}", Matrix::<Matrix<i32, U2, U2>, U2, U2>::new([[m, m2], [m2.transposed(), m]])),
+        "⎡⎡111 2⎤  ⎡1 2⎤ ⎤\n\
+         ⎢⎣ 3  4⎦  ⎣3 4⎦ ⎥\n\
+         ⎢ ⎡1 3⎤  ⎡111 2⎤⎥\n\
+         ⎣ ⎣2 4⎦  ⎣ 3  4⎦⎦");
 }
 
 impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>

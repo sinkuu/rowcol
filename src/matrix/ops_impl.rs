@@ -83,6 +83,7 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
     type Output = T;
 
     fn determinant(&self) -> T {
+        // workaround for a bug in rustc's parser (fixed in 1.13.0)
         let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
         (0 .. n)
             .map(|i| unsafe { self.get_unchecked((i, 0)).clone() } * self.cofactor(i, 0))

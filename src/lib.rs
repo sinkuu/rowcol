@@ -16,6 +16,7 @@ extern crate core as std;
 pub extern crate typenum;
 extern crate num;
 extern crate nodrop;
+#[cfg(feature = "unicode_width")] extern crate unicode_width;
 
 pub mod prelude;
 pub mod vector;
