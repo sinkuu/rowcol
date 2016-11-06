@@ -12,10 +12,10 @@ use num::Float;
 use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Neg, Rem,
     AddAssign, SubAssign, MulAssign, DivAssign, Index, IndexMut};
 use std::marker::PhantomData;
-use std::slice::Iter as SliceIter;
-use std::slice::IterMut as SliceIterMut;
+use std::slice::{Iter as SliceIter, IterMut as SliceIterMut};
 use std::mem;
 use std::ptr;
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 
 
 /// A fixed-size vector whose elements are allocated on the stack.
@@ -26,7 +26,6 @@ use std::ptr;
 /// let arr = Vector::<i32, U5>::new([1, 2, 3, 4, 5]);
 /// assert_eq!(*arr, [1, 2, 3, 4, 5]);
 /// ```
-#[derive(Debug)]
 pub struct Vector<T, N: ArrayLen<T>>(N::Array);
 
 impl<T, N: ArrayLen<T>> Vector<T, N> {
@@ -110,6 +109,15 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         false
+    }
+}
+
+impl<T, N> Debug for Vector<T, N>
+    where T: Debug, N: ArrayLen<T>
+{
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        try!(f.write_str("Vector"));
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 
