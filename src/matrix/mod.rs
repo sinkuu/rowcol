@@ -5,6 +5,7 @@ use typenum::{self, Prod, Same, Mod, UInt};
 use typenum::consts::*;
 
 use num;
+use num::Complex;
 
 use std::ops::{Add, Sub, Mul, Div, Neg, Rem,
     AddAssign, SubAssign, MulAssign, DivAssign, Index, IndexMut};
@@ -591,6 +592,26 @@ impl<T, N> num::One for Matrix<T, N, N>
     fn one() -> Self {
         Matrix::identity()
     }
+}
+
+impl<T, Row, Col> Matrix<Complex<T>, Row, Col>
+    where
+        T: Neg<Output = T> + num::Num + Clone,
+        Row: ArrayLen<Vector<Complex<T>, Col>>,
+        Col: ArrayLen<Complex<T>>,
+{
+    #[inline]
+    pub fn conjugate(&self) -> Matrix<Complex<T>, Row, Col> {
+        self.clone().map(|a| a.conj())
+    }
+}
+
+#[test]
+fn test_conjugate() {
+    let m =
+        Matrix::<Complex<i32>, U2, U2>::new([[Complex::new(1,1), Complex::new(1,-1)],
+                                            [Complex::new(-2,1), Complex::new(1,1)]]);
+    assert!((m.conjugate() + m).all(|_, a| a.im == 0));
 }
 
 macro_rules! impl_matrix_arith {
