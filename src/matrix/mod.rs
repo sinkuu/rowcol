@@ -881,10 +881,11 @@ fn test_matrix_add_sub_mul() {
     assert_eq!(m1, m1 * id);
     assert_eq!(m1 * num::pow::pow(id, 20), m1);
 
-    let m5 = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    let m5 = Matrix::<i32, U2, U1>::new([[1], [3]]);
     assert_eq!(m5[(1,0)], 3);
-    assert_eq!(m4 * m5 * 2, Matrix::new([[2, 4], [18, 24]]));
-    assert_eq!(m4 * m5 * 2 / 2, Matrix::new([[1, 2], [9, 12]]));
+    assert_eq!((m5 + m5 - m5)[(1,0)], 3);
+    assert_eq!(m4 * m5 * 2, Matrix::new([[2], [18]]));
+    assert_eq!(m4 * m5 * 2 / 2, Matrix::new([[1], [9]]));
 
     let mb = Matrix::<num::BigInt, U2, U2>::new([[1.into(), 2.into()], [3.into(), 4.into()]]);
     assert_eq!(mb.clone() * mb, Matrix::new([[7.into(), 10.into()], [15.into(), 22.into()]]));
@@ -915,7 +916,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     /// Returns an iterator over rows of this matrix.
     #[inline]
     pub fn rows_iter(&self) -> RowsIter<T, Row, Col> {
-        RowsIter(&self.0, 0, Col::to_usize())
+        RowsIter(&self.0, 0, Row::to_usize())
     }
 }
 
@@ -1087,29 +1088,27 @@ impl<'a, T: 'a, Row, Col> DoubleEndedIterator
 
 #[test]
 fn test_matrix_rows_cols_iter() {
-    let mut m: Matrix<i32, U3, U3> = Default::default();
+    let mut m: Matrix<i32, U2, U3> = Default::default();
     m[(0,0)] = 1;
     m[(1,1)] = 2;
-    m[(2,2)] = 3;
+    m[(1,2)] = 3;
     m[(0,2)] = 4;
-    assert_eq!(m.dim(), (3, 3));
-    assert_eq!(m.rows(), 3);
+    assert_eq!(m.dim(), (2, 3));
+    assert_eq!(m.rows(), 2);
     assert_eq!(m.cols(), 3);
 
     let mut rows = m.rows_iter();
 
-    assert_eq!(rows.len(), 3);
+    assert_eq!(rows.len(), 2);
     assert!(rows.next().unwrap().iter().eq(&[1, 0, 4]));
-    assert!(rows.next().unwrap().iter().eq(&[0, 2, 0]));
-    assert!(rows.next().unwrap().iter().eq(&[0, 0, 3]));
+    assert!(rows.next().unwrap().iter().eq(&[0, 2, 3]));
     assert_eq!(rows.next(), None);
     assert_eq!(rows.count(), 0);
 
     let mut rows = m.rows_iter().rev();
 
-    assert_eq!(rows.len(), 3);
-    assert!(rows.next().unwrap().iter().eq(&[0, 0, 3]));
-    assert!(rows.next().unwrap().iter().eq(&[0, 2, 0]));
+    assert_eq!(rows.len(), 2);
+    assert!(rows.next().unwrap().iter().eq(&[0, 2, 3]));
     assert!(rows.next().unwrap().iter().eq(&[1, 0, 4]));
     assert_eq!(rows.next(), None);
     assert_eq!(rows.count(), 0);
@@ -1117,18 +1116,18 @@ fn test_matrix_rows_cols_iter() {
     let mut cols = m.cols_iter();
 
     assert_eq!(cols.len(), 3);
-    assert!(cols.next().unwrap().iter().eq(&[1, 0, 0]));
-    assert!(cols.next().unwrap().iter().eq(&[0, 2, 0]));
-    assert!(cols.next().unwrap().iter().eq(&[4, 0, 3]));
+    assert!(cols.next().unwrap().iter().eq(&[1, 0]));
+    assert!(cols.next().unwrap().iter().eq(&[0, 2]));
+    assert!(cols.next().unwrap().iter().eq(&[4, 3]));
     assert_eq!(cols.next(), None);
     assert_eq!(cols.count(), 0);
 
     let mut cols = m.cols_iter().rev();
 
     assert_eq!(cols.len(), 3);
-    assert!(cols.next().unwrap().iter().eq(&[4, 0, 3]));
-    assert!(cols.next().unwrap().iter().eq(&[0, 2, 0]));
-    assert!(cols.next().unwrap().iter().eq(&[1, 0, 0]));
+    assert!(cols.next().unwrap().iter().eq(&[4, 3]));
+    assert!(cols.next().unwrap().iter().eq(&[0, 2]));
+    assert!(cols.next().unwrap().iter().eq(&[1, 0]));
     assert_eq!(cols.next(), None);
     assert_eq!(cols.count(), 0);
 }
