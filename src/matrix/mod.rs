@@ -782,7 +782,7 @@ impl<'a, T, Row, Col> MulAssign<&'a T> for Matrix<T, Row, Col>
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
-    fn mul_assign(&mut self, rhs: T) {
+    fn mul_assign(&mut self, rhs: &'a T) {
         for row in self.0.iter_mut() {
             for a in row.iter_mut() {
                 *a *= rhs;
