@@ -1,4 +1,5 @@
 use typenum;
+use typenum::uint::UInt;
 use typenum::consts::*;
 use typenum::operator_aliases::Mod;
 use typenum::type_operators::Same;
@@ -239,6 +240,64 @@ impl<T, N> IndexMut<usize> for Vector<T, N> where N: ArrayLen<T> {
     }
 }
 
+impl<T, N, IU, IB> Index<UInt<IU, IB>> for Vector<T, N>
+    where
+        N: ArrayLen<T>,
+        IU: typenum::Unsigned,
+        IB: typenum::Bit,
+        UInt<IU, IB>: typenum::Cmp<N>,
+        typenum::Compare<UInt<IU, IB>, N>: Same<typenum::Less>,
+{
+    type Output = T;
+
+    #[inline]
+    fn index(&self, _: UInt<IU, IB>) -> &T {
+        unsafe {
+            self.get_unchecked(<UInt<IU, IB> as typenum::Unsigned>::to_usize())
+        }
+    }
+}
+
+impl<T, N> Index<U0> for Vector<T, N>
+    where N: ArrayLen<T>,
+{
+    type Output = T;
+
+    #[inline]
+    fn index(&self, _: U0) -> &T {
+        unsafe {
+            self.get_unchecked(0)
+        }
+    }
+}
+
+impl<T, N, IU, IB> IndexMut<UInt<IU, IB>> for Vector<T, N>
+    where
+        N: ArrayLen<T>,
+        IU: typenum::Unsigned,
+        IB: typenum::Bit,
+        UInt<IU, IB>: typenum::Cmp<N>,
+        typenum::Compare<UInt<IU, IB>, N>: Same<typenum::Less>,
+{
+    #[inline]
+    fn index_mut(&mut self, _: UInt<IU, IB>) -> &mut T {
+        unsafe {
+            self.get_unchecked_mut(<UInt<IU, IB> as typenum::Unsigned>::to_usize())
+        }
+    }
+}
+
+impl<T, N> IndexMut<U0> for Vector<T, N>
+    where N: ArrayLen<T>,
+{
+    #[inline]
+    fn index_mut(&mut self, _: U0) -> &mut T {
+        unsafe {
+            self.get_unchecked_mut(0)
+        }
+    }
+}
+
 macro_rules! impl_vector_arith {
     (T T : $op_trait:ident, $op_fn:ident) => {
         impl<T, U, N> $op_trait<Vector<U, N>> for Vector<T, N>
@@ -248,7 +307,6 @@ macro_rules! impl_vector_arith {
         {
             type Output = Vector<<T as $op_trait<U>>::Output, N>;
 
-            #[inline]
             fn $op_fn(self, other: Vector<U, N>) -> Self::Output {
                 self.into_iter().zip(other).map(|(a, b)| $op_trait::$op_fn(a, b)).collect()
             }
@@ -263,7 +321,6 @@ macro_rules! impl_vector_arith {
         {
             type Output = Vector<<T as $op_trait<&'a U>>::Output, N>;
 
-            #[inline]
             fn $op_fn(self, other: &'a Vector<U, N>) -> Self::Output {
                 self.into_iter().zip(other.iter()).map(|(a, b)| $op_trait::$op_fn(a, b)).collect()
             }
@@ -278,7 +335,6 @@ macro_rules! impl_vector_arith {
         {
             type Output = Vector<<&'a T as $op_trait<U>>::Output, N>;
 
-            #[inline]
             fn $op_fn(self, other: Vector<U, N>) -> Self::Output {
                 self.iter().zip(other).map(|(a, b)| $op_trait::$op_fn(a, b)).collect()
             }
@@ -293,7 +349,6 @@ macro_rules! impl_vector_arith {
         {
             type Output = Vector<<&'b T as $op_trait<&'a U>>::Output, N>;
 
-            #[inline]
             fn $op_fn(self, other: &'a Vector<U, N>) -> Self::Output {
                 self.iter().zip(other.iter()).map(|(a, b)| $op_trait::$op_fn(a, b)).collect()
             }
@@ -315,6 +370,7 @@ impl<T, U, N> AddAssign<Vector<U, N>> for Vector<T, N>
         T: AddAssign<U>,
         N: ArrayLen<T> + ArrayLen<U>,
 {
+    #[inline]
     fn add_assign(&mut self, rhs: Vector<U, N>) {
         for (a, b) in self.iter_mut().zip(rhs) {
             *a += b;
@@ -327,6 +383,7 @@ impl<T, U, N> SubAssign<Vector<U, N>> for Vector<T, N>
         T: SubAssign<U>,
         N: ArrayLen<T> + ArrayLen<U>,
 {
+    #[inline]
     fn sub_assign(&mut self, rhs: Vector<U, N>) {
         for (a, b) in self.iter_mut().zip(rhs) {
             *a -= b;
@@ -381,6 +438,7 @@ impl<T, U, N> DivAssign<U> for Vector<T, N>
         U: Clone,
         N: ArrayLen<T>,
 {
+    #[inline]
     fn div_assign(&mut self, rhs: U) {
         for a in self.iter_mut() {
             *a /= rhs.clone();
@@ -431,6 +489,51 @@ fn test_vector_arith() {
 
 impl<T, N> Vector<T, N>
     where
+        T: Mul<T, Output = T> + Add<T, Output = T> + num::Zero + Clone,
+        N: ArrayLen<T>,
+{
+    /// Returns the dot product of this vector and the other.
+    pub fn dot(&self, other: &Vector<T, N>) -> T {
+        self.iter().cloned().zip(other.iter().cloned()).map(|(a, b)| a * b)
+            .fold(T::zero(), Add::add)
+    }
+}
+
+#[test]
+fn test_dot() {
+    let v  = Vector::<i32, U3>::new([1, 2, 3]);
+    let v2 = Vector::<i32, U3>::new([4, 5, 6]);
+    assert_eq!(v.dot(&v2), 32);
+}
+
+impl<T> Vector<T, U3>
+    where
+        T: Sub<T, Output = T> + Mul<T, Output = T> + Clone,
+{
+    pub fn cross(&self, other: &Vector<T, U3>) -> Vector<T, U3> {
+        macro_rules! idx {
+            ($mat:ident, $i:ident) => {
+                $mat[$i::new()].clone()
+            }
+        }
+
+        Vector::new([
+            idx!(self,U1)*idx!(other,U2) - idx!(self,U2)*idx!(other,U1),
+            idx!(self,U2)*idx!(other,U0) - idx!(self,U0)*idx!(other,U2),
+            idx!(self,U0)*idx!(other,U1) - idx!(self,U1)*idx!(other,U0),
+        ])
+    }
+}
+
+#[test]
+fn test_cross() {
+    let v  = Vector::<i32, U3>::new([1, 2, 3]);
+    let v2 = Vector::<i32, U3>::new([4, 5, 6]);
+    assert_eq!(v.cross(&v2), Vector::new([-3, 6, -3]));
+}
+
+impl<T, N> Vector<T, N>
+    where
         T: Float + Clone,
         N: ArrayLen<T>,
 {
@@ -439,6 +542,7 @@ impl<T, N> Vector<T, N>
         prod.sqrt()
     }
 
+    #[inline]
     pub fn normalized(&self) -> Vector<T, N> {
         self.clone() / self.norm()
     }
@@ -507,7 +611,6 @@ impl<T, N> Drop for IntoIter<T, N> where N: ArrayLen<T> {
 impl<T, N> Iterator for IntoIter<T, N> where N: ArrayLen<T> {
     type Item = T;
 
-    #[inline]
     fn next(&mut self) -> Option<T> {
         debug_assert!(self.back <= N::to_usize());
 
