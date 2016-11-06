@@ -630,65 +630,10 @@ macro_rules! impl_matrix_arith {
             }
         }
     };
-
-    (&T T : $op_trait:ident, $op_fn: ident) => {
-        impl<'a, T, Row, Col> $op_trait<Matrix<T, Row, Col>> for &'a Matrix<T, Row, Col>
-            where
-                &'a T: $op_trait<T>,
-                Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<&'a T as $op_trait<T>>::Output, Col>>,
-                Col: ArrayLen<T> + ArrayLen<<&'a T as $op_trait<T>>::Output>,
-        {
-            type Output = Matrix<<&'a T as $op_trait<T>>::Output, Row, Col>;
-
-            #[inline]
-            fn $op_fn(self, rhs: Matrix<T, Row, Col>) -> Self::Output {
-                Matrix($op_trait::$op_fn(&self.0, rhs.0))
-            }
-        }
-    };
-
-    (T &T : $op_trait:ident, $op_fn: ident) => {
-        impl<'a, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for Matrix<T, Row, Col>
-            where
-                T: $op_trait<&'a T>,
-                Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<<T as $op_trait<&'a T>>::Output, Col>>,
-                Col: ArrayLen<T> + ArrayLen<<T as $op_trait<&'a T>>::Output>,
-        {
-            type Output = Matrix<<T as $op_trait<&'a T>>::Output, Row, Col>;
-
-            #[inline]
-            fn $op_fn(self, rhs: &'a Matrix<T, Row, Col>) -> Self::Output {
-                Matrix($op_trait::$op_fn(self.0, &rhs.0))
-            }
-        }
-    };
-
-    (&T &T : $op_trait:ident, $op_fn: ident) => {
-        impl<'a, 'b, T, Row, Col> $op_trait<&'a Matrix<T, Row, Col>> for &'b Matrix<T, Row, Col>
-            where
-                &'b T: $op_trait<&'a T>,
-                Row: ArrayLen<Vector<T, Col>> +
-                     ArrayLen<Vector<<&'b T as $op_trait<&'a T>>::Output, Col>>,
-                Col: ArrayLen<T> + ArrayLen<<&'b T as $op_trait<&'a T>>::Output>,
-        {
-            type Output = Matrix<<&'b T as $op_trait<&'a T>>::Output, Row, Col>;
-
-            #[inline]
-            fn $op_fn(self, rhs: &'a Matrix<T, Row, Col>) -> Self::Output {
-                Matrix($op_trait::$op_fn(&self.0, &rhs.0))
-            }
-        }
-    };
 }
 
 impl_matrix_arith!(T T: Add, add);
 impl_matrix_arith!(T T: Sub, sub);
-impl_matrix_arith!(&T T: Add, add);
-impl_matrix_arith!(&T T: Sub, sub);
-impl_matrix_arith!(T &T: Add, add);
-impl_matrix_arith!(T &T: Sub, sub);
-impl_matrix_arith!(&T &T: Add, add);
-impl_matrix_arith!(&T &T: Sub, sub);
 
 impl<T, U, Row, Col> AddAssign<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
     where
@@ -864,18 +809,14 @@ fn test_matrix_add_sub_mul() {
     assert_eq!(m3[(1,1)], 5);
     assert_eq!(-m3, Matrix::new([[-1, 0], [0, -5]]));
 
-    assert_eq!(&m1 + m2, Matrix::new([[1, 0], [0, 5]]));
-    assert_eq!(m1 + &m2, Matrix::new([[1, 0], [0, 5]]));
-    assert_eq!(&m1 + &m2, Matrix::new([[1, 0], [0, 5]]));
+    assert_eq!(m1 + m2, Matrix::new([[1, 0], [0, 5]]));
 
     let m4 = m1 - m2;
     assert_eq!(m4, Matrix::new([[1, 0], [0, 3]]));
     assert_eq!(m4[(0,0)], 1);
     assert_eq!(m4[(1,1)], 3);
 
-    assert_eq!(&m1 - m2, Matrix::new([[1, 0], [0, 3]]));
-    assert_eq!(m1 - &m2, Matrix::new([[1, 0], [0, 3]]));
-    assert_eq!(&m1 - &m2, Matrix::new([[1, 0], [0, 3]]));
+    assert_eq!(m1 - m2, Matrix::new([[1, 0], [0, 3]]));
 
     let id = Matrix::identity();
     assert_eq!(m1, m1 * id);
