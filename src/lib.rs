@@ -1,7 +1,7 @@
 //! `rowcol` crate provides fixed-size [`Vector`] and [`Matrix`].
-//! Their length or number of rows/columns are specified as type parameter,
-//! using type-level numerics provided by `typenum` crate.
-//! This let vectors and matrices be internally represented as fixed-length arrays,
+//! Their length or number of rows/columns are specified as type parameters,
+//! using type-level numbers provided by `typenum` crate.
+//! This lets vectors and matrices be internally represented as fixed-length arrays,
 //! therefore they are allocated on the stack, and becomes `Copy` if their content
 //! is `Copy`. Also, errors like computing the determinant of a non-square matrix
 //! can be detected at compile-time, instead of causing runtime panic.
