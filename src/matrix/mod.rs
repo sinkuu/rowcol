@@ -1,5 +1,5 @@
-mod ops_impl;
-pub use self::ops_impl::{Cofactor, Determinant, Inverse};
+pub mod ops;
+pub use self::ops::{Cofactor, Determinant, Inverse};
 
 use typenum::{self, Prod, Same, Mod, UInt};
 use typenum::consts::*;
