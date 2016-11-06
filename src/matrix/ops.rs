@@ -207,65 +207,78 @@ pub trait Inverse {
     type Output;
 
     /// Returns the inverse of this matrix.
-    fn inverse(&self) -> Self::Output;
+    fn inverse(&self) -> Option<Self::Output>;
 }
 
-impl<T> Inverse for Matrix<T, U1, U1> where T: Clone + num::One + for<'a> Div<&'a T, Output = T> {
+impl<T> Inverse for Matrix<T, U1, U1> where T: num::Zero + num::One + for<'a> Div<&'a T, Output = T> {
     type Output = Matrix<T, U1, U1>;
 
     #[inline]
-    fn inverse(&self) -> Self::Output {
-        Matrix::new([[T::one() / idx!(self(U0,U0))]])
+    fn inverse(&self) -> Option<Self::Output> {
+        let d = idx!(self(U0,U0));
+        if d.is_zero() {
+            None
+        } else {
+            Some(Matrix::new([[T::one() / d]]))
+        }
     }
 }
 
 impl<T> Inverse for Matrix<T, U2, U2>
     where
         Matrix<T, U2, U2>: Determinant<Output = T>,
-        T: for<'a> Div<&'a T, Output = T> + Neg<Output = T> + Clone,
+        T: num::Zero + for<'a> Div<&'a T, Output = T> + Neg<Output = T> + Clone,
 {
     type Output = Matrix<T, U2, U2>;
 
     #[inline]
-    fn inverse(&self) -> Self::Output {
+    fn inverse(&self) -> Option<Self::Output> {
         let det = self.determinant();
-        Matrix::<T, U2, U2>::new([[idx!(self(U1,U1)).clone(), -idx!(self(U0,U1)).clone()],
-                                 [-idx!(self(U1,U0)).clone(), idx!(self(U0,U0)).clone()]]) / det
+        if det.is_zero() {
+            None
+        } else {
+            Some(Matrix::<T, U2, U2>::new([[idx!(self(U1,U1)).clone(), -idx!(self(U0,U1)).clone()],
+                                     [-idx!(self(U1,U0)).clone(), idx!(self(U0,U0)).clone()]]) / det)
+        }
     }
 }
 
 impl<T> Inverse for Matrix<T, U3, U3>
     where
         Matrix<T, U3, U3>: Determinant<Output = T>,
-        T: Mul<T, Output = T> + for<'a> Div<&'a T, Output = T> + Sub<T, Output = T> + Clone,
+        T: num::Zero + Mul<T, Output = T> + for<'a> Div<&'a T, Output = T> + Sub<T, Output = T> + Clone,
         for<'a> &'a T: Mul<&'a T, Output = T>,
 {
     type Output = Matrix<T, U3, U3>;
 
     #[inline]
-    fn inverse(&self) -> Self::Output {
+    fn inverse(&self) -> Option<Self::Output> {
         let det = self.determinant();
 
-        macro_rules! ms {
-            ($mat:ident : $( ($i1:ident, $j1:ident) * ($i2:ident, $j2:ident) -
-                             ($i3:ident, $j3:ident) * ($i4:ident, $j4:ident) ),*) => {
-                [$(
-                    idx!($mat($i1, $j1)) * idx!($mat($i2, $j2)) -
-                    idx!($mat($i3, $j3)) * idx!($mat($i4, $j4)),
-                )*]
-            };
+        if det.is_zero() {
+            None
+        } else {
+            macro_rules! ms {
+                ($mat:ident : $( ($i1:ident, $j1:ident) * ($i2:ident, $j2:ident) -
+                                 ($i3:ident, $j3:ident) * ($i4:ident, $j4:ident) ),*) => {
+                    [$(
+                        idx!($mat($i1, $j1)) * idx!($mat($i2, $j2)) -
+                        idx!($mat($i3, $j3)) * idx!($mat($i4, $j4)),
+                    )*]
+                };
+            }
+
+            let arr = [
+                ms![self : (U1,U1)*(U2,U2)-(U1,U2)*(U2,U1), (U0,U2)*(U2,U1)-(U0,U1)*(U2,U2),
+                    (U0,U1)*(U1,U2)-(U0,U2)*(U1,U1)],
+                ms![self : (U1,U2)*(U2,U0)-(U1,U0)*(U2,U2), (U0,U0)*(U2,U2)-(U0,U2)*(U2,U0),
+                    (U0,U2)*(U1,U0)-(U0,U0)*(U1,U2)],
+                ms![self : (U1,U0)*(U2,U1)-(U1,U1)*(U2,U0), (U0,U1)*(U2,U0)-(U0,U0)*(U2,U1),
+                    (U0,U0)*(U1,U1)-(U0,U1)*(U1,U0)],
+            ];
+
+            Some(Matrix::<T, U3, U3>::new(arr) / det)
         }
-
-        let arr = [
-            ms![self : (U1,U1)*(U2,U2)-(U1,U2)*(U2,U1), (U0,U2)*(U2,U1)-(U0,U1)*(U2,U2),
-                (U0,U1)*(U1,U2)-(U0,U2)*(U1,U1)],
-            ms![self : (U1,U2)*(U2,U0)-(U1,U0)*(U2,U2), (U0,U0)*(U2,U2)-(U0,U2)*(U2,U0),
-                (U0,U2)*(U1,U0)-(U0,U0)*(U1,U2)],
-            ms![self : (U1,U0)*(U2,U1)-(U1,U1)*(U2,U0), (U0,U1)*(U2,U0)-(U0,U0)*(U2,U1),
-                (U0,U0)*(U1,U1)-(U0,U1)*(U1,U0)],
-        ];
-
-        Matrix::<T, U3, U3>::new(arr) / det
     }
 }
 
@@ -275,12 +288,12 @@ fn test_hard_coded_inverse() {
     use num::{BigInt, ToPrimitive};
 
     let m = Matrix::<i32, U2, U2>::new([[1, 5], [2, 4]]).map(|x| Ratio::from_integer(BigInt::from(x)));
-    let mi = m.inverse();
+    let mi = m.inverse().unwrap();
     assert_eq!((mi * Ratio::from_integer(BigInt::from(6))).map(|a| a.to_integer().to_i32().unwrap()),
         Matrix::new([[-4, 5], [2, -1]]));
 
     let m = Matrix::<i32, U3, U3>::new([[1, 5, 3], [2, 4, 1], [2, 2, 2]]).map(Ratio::from_integer);
-    let mi = m.inverse();
+    let mi = m.inverse().unwrap();
     assert_eq!((mi * Ratio::from_integer(16)).map(|a| a.to_integer()),
                Matrix::new([[-6, 4, 7], [2, 4, -5], [4, -8, 6]]));
 }
@@ -301,14 +314,20 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
 {
     type Output = Self;
 
-    fn inverse(&self) -> Self {
+    fn inverse(&self) -> Option<Self> {
         let mut mat = self.clone();
         let mut inv: Self::Output = Matrix::identity();
 
         let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
 
         for i in 0..n {
-            let rcp = T::one() / unsafe { mat.get_unchecked((i, i)) };
+            let rcp = {
+                let d = unsafe { mat.get_unchecked((i, i)) };
+                if d.is_zero() {
+                    return None;
+                }
+                T::one() / d
+            };
 
             for j in 0..n {
                 unsafe {
@@ -333,7 +352,8 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
                 }
             }
         }
-        inv
+
+        Some(inv)
     }
 }
 
@@ -346,7 +366,7 @@ fn test_inverse() {
                                        [2, 4, 1, 2],
                                        [2, 2, 2, 1],
                                        [1, 5, 1, 1]]).map(Ratio::from_integer);
-    let mi = m.inverse();
+    let mi = m.inverse().unwrap();
     assert_eq!((mi * Ratio::from_integer(12)).map(|a| a.to_integer()),
         Matrix::new([
                     [-9, -6, 12, 9],
