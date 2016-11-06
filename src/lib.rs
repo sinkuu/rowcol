@@ -9,8 +9,8 @@
 //! [`Vector`]: ./vector/struct.Vector.html
 //! [`Matrix`]: ./matrix/struct.Matrix.html
 
-#![cfg_attr(not(feature = "std"), no_std)]
-#[cfg(not(feature = "std"))]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
+#[cfg(not(any(test, feature = "std")))]
 extern crate core as std;
 
 pub extern crate typenum;
