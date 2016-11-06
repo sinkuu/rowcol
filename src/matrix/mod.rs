@@ -6,7 +6,8 @@ use typenum::consts::*;
 
 use num;
 
-use std::ops::{Add, Sub, Mul, Div, Neg, Rem, Index, IndexMut};
+use std::ops::{Add, Sub, Mul, Div, Neg, Rem,
+    AddAssign, SubAssign, MulAssign, DivAssign, Index, IndexMut};
 use std::fmt::{Debug, Formatter};
 use std::fmt::Result as FmtResult;
 
@@ -577,6 +578,36 @@ impl_matrix_arith!(T &T: Sub, sub);
 impl_matrix_arith!(&T &T: Add, add);
 impl_matrix_arith!(&T &T: Sub, sub);
 
+impl<T, U, Row, Col> AddAssign<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
+    where
+        T: AddAssign<U>,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<U, Col>>,
+        Col: ArrayLen<T> + ArrayLen<U>,
+{
+    fn add_assign(&mut self, rhs: Matrix<U, Row, Col>) {
+        for (lrow, rrow) in self.0.iter_mut().zip(rhs.0) {
+            for (l, r) in lrow.iter_mut().zip(rrow) {
+                *l += r;
+            }
+        }
+    }
+}
+
+impl<T, U, Row, Col> SubAssign<Matrix<U, Row, Col>> for Matrix<T, Row, Col>
+    where
+        T: SubAssign<U>,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<U, Col>>,
+        Col: ArrayLen<T> + ArrayLen<U>,
+{
+    fn sub_assign(&mut self, rhs: Matrix<U, Row, Col>) {
+        for (lrow, rrow) in self.0.iter_mut().zip(rhs.0) {
+            for (l, r) in lrow.iter_mut().zip(rrow) {
+                *l -= r;
+            }
+        }
+    }
+}
+
 impl<T, Row, Col> Neg for Matrix<T, Row, Col>
     where
         T: Neg,
@@ -600,6 +631,22 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
 
     fn mul(self, rhs: T) -> Self::Output {
         Matrix(self.0.into_iter().map(|row| row * rhs.clone()).collect())
+    }
+}
+
+impl<T, U, Row, Col> MulAssign<U> for Matrix<T, Row, Col>
+    where
+        T: MulAssign<U>,
+        U: Clone,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    fn mul_assign(&mut self, rhs: U) {
+        for row in self.0.iter_mut() {
+            for a in row.iter_mut() {
+                *a *= rhs.clone();
+            }
+        }
     }
 }
 
@@ -637,6 +684,23 @@ impl<T, U, Row, Col> Div<U> for Matrix<T, Row, Col>
         }).collect())
     }
 }
+
+impl<T, U, Row, Col> DivAssign<U> for Matrix<T, Row, Col>
+    where
+        T: DivAssign<U>,
+        U: Clone,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    fn div_assign(&mut self, rhs: U) {
+        for row in self.0.iter_mut() {
+            for a in row.iter_mut() {
+                *a /= rhs.clone();
+            }
+        }
+    }
+}
+
 
 #[test]
 fn test_matrix_add_sub_mul() {

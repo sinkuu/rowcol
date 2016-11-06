@@ -19,3 +19,4 @@ default-features = false
 [features]
 default = ["std"]
 std = ["nodrop/std"]
+use_needs_drop = ["nodrop/use_needs_drop"]

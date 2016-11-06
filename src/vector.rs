@@ -8,7 +8,8 @@ use nodrop::NoDrop;
 use num;
 use num::Float;
 
-use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Neg, Rem, Index, IndexMut};
+use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Neg, Rem,
+    AddAssign, SubAssign, MulAssign, DivAssign, Index, IndexMut};
 use std::marker::PhantomData;
 use std::slice::Iter as SliceIter;
 use std::slice::IterMut as SliceIterMut;
@@ -309,6 +310,30 @@ impl_vector_arith!(&T T: Sub, sub);
 impl_vector_arith!(&T &T: Add, add);
 impl_vector_arith!(&T &T: Sub, sub);
 
+impl<T, U, N> AddAssign<Vector<U, N>> for Vector<T, N>
+    where
+        T: AddAssign<U>,
+        N: ArrayLen<T> + ArrayLen<U>,
+{
+    fn add_assign(&mut self, rhs: Vector<U, N>) {
+        for (a, b) in self.iter_mut().zip(rhs) {
+            *a += b;
+        }
+    }
+}
+
+impl<T, U, N> SubAssign<Vector<U, N>> for Vector<T, N>
+    where
+        T: SubAssign<U>,
+        N: ArrayLen<T> + ArrayLen<U>,
+{
+    fn sub_assign(&mut self, rhs: Vector<U, N>) {
+        for (a, b) in self.iter_mut().zip(rhs) {
+            *a -= b;
+        }
+    }
+}
+
 impl<T, U, N> Mul<U> for Vector<T, N>
     where
         T: Mul<U>,
@@ -320,6 +345,19 @@ impl<T, U, N> Mul<U> for Vector<T, N>
     #[inline]
     fn mul(self, rhs: U) -> Self::Output {
         self.into_iter().map(|e| e * rhs.clone()).collect()
+    }
+}
+
+impl<T, U, N> MulAssign<U> for Vector<T, N>
+    where
+        T: MulAssign<U>,
+        U: Clone,
+        N: ArrayLen<T>,
+{
+    fn mul_assign(&mut self, rhs: U) {
+        for a in self.iter_mut() {
+            *a *= rhs.clone();
+        }
     }
 }
 
@@ -336,6 +374,20 @@ impl<T, U, N> Div<U> for Vector<T, N>
         self.into_iter().map(|e| e / rhs.clone()).collect()
     }
 }
+
+impl<T, U, N> DivAssign<U> for Vector<T, N>
+    where
+        T: DivAssign<U>,
+        U: Clone,
+        N: ArrayLen<T>,
+{
+    fn div_assign(&mut self, rhs: U) {
+        for a in self.iter_mut() {
+            *a /= rhs.clone();
+        }
+    }
+}
+
 
 impl<T, N> Neg for Vector<T, N>
     where T: Neg, N: ArrayLen<T> + ArrayLen<<T as Neg>::Output>
@@ -365,6 +417,16 @@ fn test_vector_arith() {
 
     assert_eq!(a * 2, Vector::new([2, 4, 6]));
     assert_eq!(b / 2, Vector::new([2, 2, 3]));
+
+    let mut a = a;
+    a *= 4;
+    assert_eq!(a, Vector::new([4, 8, 12]));
+    a /= 2;
+    assert_eq!(a, Vector::new([2, 4, 6]));
+    a -= Vector::new([1, 1, 1]);
+    assert_eq!(a, Vector::new([1, 3, 5]));
+    a += Vector::new([1, 2, 3]);
+    assert_eq!(a, Vector::new([2, 5, 8]));
 }
 
 impl<T, N> Vector<T, N>
