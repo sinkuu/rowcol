@@ -450,12 +450,12 @@ impl<T, N> Iterator for IntoIter<T, N> where N: ArrayLen<T> {
         debug_assert!(self.back <= N::to_usize());
 
         if self.next < self.back {
-            debug_assert!(self.next < N::to_usize());
-
             let i = self.next;
             self.next += 1;
 
-            Some(unsafe { ptr::read((self.arr.as_ref().as_ptr() as usize + i*mem::size_of::<T>()) as *const T) })
+            Some(unsafe {
+                ptr::read((self.arr.as_ref().as_ptr() as usize + i*mem::size_of::<T>()) as *const T)
+            })
         } else {
             None
         }
@@ -471,6 +471,28 @@ impl<T, N> Iterator for IntoIter<T, N> where N: ArrayLen<T> {
     fn count(self) -> usize {
         self.len()
     }
+}
+
+impl<T, N> DoubleEndedIterator for IntoIter<T, N> where N: ArrayLen<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        debug_assert!(self.back <= N::to_usize());
+
+        if self.back > 0 {
+            self.back -= 1;
+
+            Some(unsafe {
+                ptr::read((self.arr.as_ref().as_ptr() as usize + self.back*mem::size_of::<T>()) as *const T)
+            })
+        } else {
+            None
+        }
+    }
+}
+
+#[test]
+fn test_vec_intoiter_next_back() {
+    let v = Vector::<i32, U3>::new([1, 2, 3]);
+    assert!(v.into_iter().rev().eq(vec![3, 2, 1]));
 }
 
 impl<T, N> ExactSizeIterator for IntoIter<T, N> where N: ArrayLen<T> {
@@ -517,6 +539,22 @@ impl<T, N, I> Iterator for Chunks<T, N, I>
     }
 }
 
+impl<T, N, I> DoubleEndedIterator for Chunks<T, N, I>
+    where
+        N: ArrayLen<T> + Rem<I>,
+        I: ArrayLen<T>,
+        Mod<N, I>: Same<U0>,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.it.len() == 0 {
+            None
+        } else {
+            Some((&mut self.it).rev().take(I::to_usize()).collect::<Vector<T, I>>().into_iter()
+                 .rev().collect())
+        }
+    }
+}
+
 impl<T, N, I> ExactSizeIterator for Chunks<T, N, I>
     where
         N: ArrayLen<T> + Rem<I>,
@@ -534,6 +572,12 @@ fn test_vector_chunks() {
     let a: [i32; 2] = it.next().unwrap().into_inner();
     assert_eq!(a, [3, 4]);
     assert_eq!(it.len(), 1);
+
+    let mut it = arr.into_chunks::<U2>().rev();
+    assert_eq!(it.next(), Some(Vector::new([5, 6])));
+    assert_eq!(it.next(), Some(Vector::new([3, 4])));
+    assert_eq!(it.next(), Some(Vector::new([1, 2])));
+    assert_eq!(it.next(), None);
 }
 
 pub trait ArrayLen<T>: typenum::Unsigned {

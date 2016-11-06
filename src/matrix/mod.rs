@@ -812,6 +812,7 @@ impl<'a, T: 'a, Row, Col> Iterator
     type Item = Vector<T, Row>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        debug_assert!(self.2 <= Col::to_usize());
         if self.1 < self.2 {
             let s = self.1;
             self.1 += 1;
