@@ -9,7 +9,6 @@ use num;
 use std::ops::{Add, Sub, Mul, Div, Neg, Rem, Index, IndexMut};
 use std::fmt::{Debug, Formatter};
 use std::fmt::Result as FmtResult;
-use std::mem;
 
 use vector::{Vector, ArrayLen};
 
@@ -57,13 +56,8 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
         -> Matrix<T, Row, Col>
     {
-        unsafe {
-            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<T, Col>>>::Array>();
-            for (e, row) in arr.as_mut().into_iter().zip(Vector::<<Col as ArrayLen<T>>::Array, Row>::new(rows)) {
-                mem::forget(mem::replace(e, Vector::new(row)));
-            }
-            Matrix(Vector::new(arr))
-        }
+        Matrix(Vector::<<Col as ArrayLen<T>>::Array, Row>::new(rows).into_iter()
+               .map(Vector::new).collect())
     }
 }
 
@@ -91,13 +85,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     }
 
     pub fn generate<F>(mut f: F) -> Self where F: FnMut((usize, usize)) -> T {
-        unsafe {
-            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<T, Col>>>::Array>();
-            for (i, e) in arr.as_mut().into_iter().enumerate() {
-                mem::forget(mem::replace(e, Vector::generate(|j| f((i, j)))));
-            }
-            Matrix(Vector::new(arr))
-        }
+        Matrix((0..Row::to_usize()).map(|i| Vector::generate(|j| f((i, j)))).collect())
     }
 
     pub fn all<F>(&self, mut pred: F) -> bool where F: FnMut((usize, usize), &T) -> bool {
@@ -116,19 +104,9 @@ impl<T, Row, Col> Matrix<T, Row, Col>
             Row: ArrayLen<Vector<U, Col>>,
             Col: ArrayLen<U>,
     {
-        unsafe {
-            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<U, Col>>>::Array>();
-
-            for (srow, ea) in self.0.into_iter().zip(arr.as_mut()) {
-                let mut row = mem::uninitialized::<<Col as ArrayLen<U>>::Array>();
-                for (selem, e) in srow.into_iter().zip(row.as_mut()) {
-                    mem::forget(mem::replace(e, f(selem)));
-                }
-                mem::forget(mem::replace(ea, Vector::new(row)));
-            }
-
-            Matrix(Vector::new(arr))
-        }
+        Matrix(self.0.into_iter()
+               .map(|row| row.into_iter().map(|a| f(a)).collect())
+               .collect())
     }
 
     #[inline]
@@ -636,20 +614,11 @@ impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     type Output = Matrix<Prod<T, T>, LRow, RCol>;
 
     fn mul(self, rhs: Matrix<T, N, RCol>) -> Self::Output {
-        unsafe {
-            let mut arr = mem::uninitialized::<<LRow as ArrayLen<Vector<T, RCol>>>::Array>();
-
-            for (lrow, ea) in self.0.into_iter().zip(arr.as_mut()) {
-                let mut row = mem::uninitialized::<<RCol as ArrayLen<T>>::Array>();
-                for (rcol, e) in rhs.cols_iter().zip(row.as_mut()) {
-                    let v = lrow.iter().cloned().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add);
-                    mem::forget(mem::replace(e, v));
-                }
-                mem::forget(mem::replace(ea, Vector::new(row)));
-            }
-
-            Matrix(Vector::new(arr))
-        }
+        Matrix(self.0.into_iter().map(|lrow| {
+            rhs.cols_iter().map(|rcol| {
+                lrow.iter().cloned().zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
+            }).collect()
+        }).collect())
     }
 }
 
@@ -663,13 +632,9 @@ impl<T, U, Row, Col> Div<U> for Matrix<T, Row, Col>
     type Output = Matrix<<T as Div<U>>::Output, Row, Col>;
 
     fn div(self, rhs: U) -> Self::Output {
-        unsafe {
-            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<<T as Div<U>>::Output, Col>>>::Array>();
-            for (e, row) in arr.as_mut().into_iter().zip(self.0) {
-                mem::forget(mem::replace(e, row / rhs.clone()));
-            }
-            Matrix(Vector::new(arr))
-        }
+        Matrix(self.0.into_iter().map(|row| {
+            row / rhs.clone()
+        }).collect())
     }
 }
 
@@ -851,13 +816,8 @@ impl<'a, T: 'a, Row, Col> Iterator
             let s = self.1;
             self.1 += 1;
 
-            unsafe {
-                let mut arr = mem::uninitialized::<<Row as ArrayLen<T>>::Array>();
-                for (e, x) in arr.as_mut().into_iter().zip(self.0.iter().map(|row| &row.as_slice()[s])) {
-                    mem::forget(mem::replace(e, x.clone()));
-                }
-                Some(Vector::new(arr))
-            }
+            let v = self.0.iter().map(|row| unsafe { row.as_slice().get_unchecked(s).clone() }).collect();
+            Some(v)
         } else {
             None
         }

@@ -35,16 +35,8 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     }
 
     #[inline]
-    pub fn generate<F>(mut f: F) -> Self where F: FnMut(usize) -> T {
-        unsafe {
-            let mut arr = mem::uninitialized::<N::Array>();
-
-            for (i, e) in arr.as_mut().into_iter().enumerate() {
-                mem::forget(mem::replace(e, f(i)));
-            }
-
-            Vector(arr)
-        }
+    pub fn generate<F>(f: F) -> Self where F: FnMut(usize) -> T {
+        (0..N::to_usize()).map(f).collect()
     }
 
     /// Returns the inner array.
@@ -126,15 +118,7 @@ impl<T, N> Clone for Vector<T, N>
 {
     #[inline]
     fn clone(&self) -> Self {
-        unsafe {
-            let mut arr = mem::uninitialized::<N::Array>();
-
-            for (e, x) in arr.as_mut().into_iter().zip(self.iter().cloned()) {
-                mem::forget(mem::replace(e, x));
-            }
-
-            Vector(arr)
-        }
+        self.iter().cloned().collect()
     }
 }
 
@@ -241,12 +225,14 @@ impl<T, N> num::Bounded for Vector<T, N> where T: num::Bounded, N: ArrayLen<T> {
 impl<T, N> Index<usize> for Vector<T, N> where N: ArrayLen<T> {
     type Output = T;
 
+    #[inline]
     fn index(&self, idx: usize) -> &T {
         &self.as_slice()[idx]
     }
 }
 
 impl<T, N> IndexMut<usize> for Vector<T, N> where N: ArrayLen<T> {
+    #[inline]
     fn index_mut(&mut self, idx: usize) -> &mut T {
         &mut self.as_slice_mut()[idx]
     }
@@ -261,16 +247,9 @@ macro_rules! impl_vector_arith {
         {
             type Output = Vector<<T as $op_trait<U>>::Output, N>;
 
+            #[inline]
             fn $op_fn(self, other: Vector<U, N>) -> Self::Output {
-                unsafe {
-                    let mut arr = mem::uninitialized::<<N as ArrayLen<<T as $op_trait<U>>::Output>>::Array>();
-
-                    for (e, (a, b)) in arr.as_mut().into_iter().zip(self.into_iter().zip(other.into_iter())) {
-                        mem::forget(mem::replace(e, $op_trait::$op_fn(a, b)));
-                    }
-
-                    Vector(arr)
-                }
+                self.into_iter().zip(other).map(|(a, b)| $op_trait::$op_fn(a, b)).collect()
             }
         }
     };
@@ -283,16 +262,9 @@ macro_rules! impl_vector_arith {
         {
             type Output = Vector<<T as $op_trait<&'a U>>::Output, N>;
 
+            #[inline]
             fn $op_fn(self, other: &'a Vector<U, N>) -> Self::Output {
-                unsafe {
-                    let mut arr = mem::uninitialized::<<N as ArrayLen<<T as $op_trait<&'a U>>::Output>>::Array>();
-
-                    for (e, (a, b)) in arr.as_mut().into_iter().zip(self.into_iter().zip(other.iter())) {
-                        mem::forget(mem::replace(e, $op_trait::$op_fn(a, b)));
-                    }
-
-                    Vector(arr)
-                }
+                self.into_iter().zip(other.iter()).map(|(a, b)| $op_trait::$op_fn(a, b)).collect()
             }
         }
     };
@@ -305,16 +277,9 @@ macro_rules! impl_vector_arith {
         {
             type Output = Vector<<&'a T as $op_trait<U>>::Output, N>;
 
+            #[inline]
             fn $op_fn(self, other: Vector<U, N>) -> Self::Output {
-                unsafe {
-                    let mut arr = mem::uninitialized::<<N as ArrayLen<<&'a T as $op_trait<U>>::Output>>::Array>();
-
-                    for (e, (a, b)) in arr.as_mut().into_iter().zip(self.iter().zip(other)) {
-                        mem::forget(mem::replace(e, $op_trait::$op_fn(a, b)));
-                    }
-
-                    Vector(arr)
-                }
+                self.iter().zip(other).map(|(a, b)| $op_trait::$op_fn(a, b)).collect()
             }
         }
     };
@@ -327,16 +292,9 @@ macro_rules! impl_vector_arith {
         {
             type Output = Vector<<&'b T as $op_trait<&'a U>>::Output, N>;
 
+            #[inline]
             fn $op_fn(self, other: &'a Vector<U, N>) -> Self::Output {
-                unsafe {
-                    let mut arr = mem::uninitialized::<<N as ArrayLen<<&'b T as $op_trait<&'a U>>::Output>>::Array>();
-
-                    for (e, (a, b)) in arr.as_mut().into_iter().zip(self.iter().zip(other.iter())) {
-                        mem::forget(mem::replace(e, $op_trait::$op_fn(a, b)));
-                    }
-
-                    Vector(arr)
-                }
+                self.iter().zip(other.iter()).map(|(a, b)| $op_trait::$op_fn(a, b)).collect()
             }
         }
     };
@@ -359,14 +317,9 @@ impl<T, U, N> Mul<U> for Vector<T, N>
 {
     type Output = Vector<<T as Mul<U>>::Output, N>;
 
+    #[inline]
     fn mul(self, rhs: U) -> Self::Output {
-        unsafe {
-            let mut arr = mem::uninitialized::<<N as ArrayLen<<T as Mul<U>>::Output>>::Array>();
-            for (e, x) in arr.as_mut().into_iter().zip(self) {
-                mem::forget(mem::replace(e, x * rhs.clone()));
-            }
-            Vector::new(arr)
-        }
+        self.into_iter().map(|e| e * rhs.clone()).collect()
     }
 }
 
@@ -378,14 +331,9 @@ impl<T, U, N> Div<U> for Vector<T, N>
 {
     type Output = Vector<<T as Div<U>>::Output, N>;
 
+    #[inline]
     fn div(self, rhs: U) -> Self::Output {
-        unsafe {
-            let mut arr = mem::uninitialized::<<N as ArrayLen<<T as Div<U>>::Output>>::Array>();
-            for (e, x) in arr.as_mut().into_iter().zip(self) {
-                mem::forget(mem::replace(e, x / rhs.clone()));
-            }
-            Vector::new(arr)
-        }
+        self.into_iter().map(|e| e / rhs.clone()).collect()
     }
 }
 
@@ -394,14 +342,9 @@ impl<T, N> Neg for Vector<T, N>
 {
     type Output = Vector<<T as Neg>::Output, N>;
 
+    #[inline]
     fn neg(self) -> Self::Output {
-        unsafe {
-            let mut arr = mem::uninitialized::<<N as ArrayLen<<T as Neg>::Output>>::Array>();
-            for (e, x) in arr.as_mut().into_iter().zip(self) {
-                mem::forget(mem::replace(e, -x));
-            }
-            Vector::new(arr)
-        }
+        self.into_iter().map(|e| -e).collect()
     }
 }
 

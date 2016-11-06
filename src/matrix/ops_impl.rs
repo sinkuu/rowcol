@@ -114,27 +114,11 @@ impl<T> Cofactor for Matrix<T, U3, U3>
 
         let sgn = num::pow::pow(-T::one(), i + j);
 
-        let arr = unsafe {
-            use std::mem;
+        let arr = self.rows_iter().enumerate().filter(|&(ii, _)| ii != i).map(|(_, row)| {
+            row.into_iter().enumerate().filter(|&(jj, _)| jj != j).map(|(_, a)| a.clone()).collect()
+        }).collect();
 
-            let mut arr = mem::uninitialized::<[T; 4]>();
-
-            let mut idx = 0;
-            for (ii, row) in self.rows_iter().enumerate() {
-                if ii == i { continue; }
-
-                for (jj, a) in row.into_iter().enumerate() {
-                    if jj == j { continue; }
-
-                    *arr.get_unchecked_mut(idx) = a.clone();
-                    idx += 1;
-                }
-            }
-
-            arr
-        };
-
-        sgn * Matrix::<T, U2, U2>::from(Vector::new(arr)).determinant()
+        sgn * Matrix::<T, U2, U2>(arr).determinant()
     }
 }
 
