@@ -12,10 +12,10 @@ keywords = ["matrix", "array", "stack"]
 typenum = "1.5.0"
 num = "0.1.36"
 
-[dependencies.arrayvec]
-version = "0.3.20"
+[dependencies.nodrop]
+version = "0.1.8"
 default-features = false
 
 [features]
 default = ["std"]
-std = ["arrayvec/std"]
+std = ["nodrop/std"]

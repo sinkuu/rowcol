@@ -6,7 +6,6 @@ use typenum::consts::*;
 use typenum::uint::UInt;
 use typenum::operator_aliases::Diff;
 use num;
-use arrayvec::ArrayVec;
 
 use std::ops::{Add, Mul, Sub, Div, Neg};
 
@@ -113,26 +112,29 @@ impl<T> Cofactor for Matrix<T, U3, U3>
     fn cofactor(&self, i: usize, j: usize) -> T {
         assert!(i < 3 && j < 3);
 
-        let mut arr = ArrayVec::new();
-
-        for (ii, row) in self.rows_iter().enumerate() {
-            if ii == i { continue; }
-
-            for (jj, a) in row.into_iter().enumerate() {
-                if jj == j { continue; }
-                arr.push(a.clone());
-            }
-        }
-
-        debug_assert!(arr.is_full());
-
         let sgn = num::pow::pow(-T::one(), i + j);
 
-        sgn *
-            Matrix::<T, U2, U2>::from(Vector::new(arr
-                                      .into_inner()
-                                      .unwrap_or_else(|_| unreachable!())))
-                .determinant()
+        let arr = unsafe {
+            use std::mem;
+
+            let mut arr = mem::uninitialized::<[T; 4]>();
+
+            let mut idx = 0;
+            for (ii, row) in self.rows_iter().enumerate() {
+                if ii == i { continue; }
+
+                for (jj, a) in row.into_iter().enumerate() {
+                    if jj == j { continue; }
+
+                    *arr.get_unchecked_mut(idx) = a.clone();
+                    idx += 1;
+                }
+            }
+
+            arr
+        };
+
+        sgn * Matrix::<T, U2, U2>::from(Vector::new(arr)).determinant()
     }
 }
 
@@ -162,31 +164,20 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
         let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
         assert!(i < n && j < n);
 
-        let mut arr = ArrayVec::new();
-
-        for (ii, row) in self.rows_iter().enumerate() {
-            if ii == i { continue; }
-
-            let mut subrow = ArrayVec::new();
-
-            for (jj, a) in row.into_iter().enumerate() {
-                if jj == j { continue; }
-                subrow.push(a);
-            }
-
-            arr.push(subrow.into_inner().unwrap_or_else(|_| unreachable!()));
-        }
-
-        debug_assert!(arr.is_full());
+        let arr = self.rows_iter().enumerate().filter(|&(ii, _)| ii != i).map(|(_, row)| {
+                row.into_iter()
+                    .enumerate()
+                    .filter(|&(jj, _)| jj != j)
+                    .map(|(_, a)| a)
+                    .collect::<Vector<T, _>>()
+            }).collect();
 
         let sgn = num::pow::pow(-T::one(), i + j);
 
         sgn *
             Matrix::<T,
                      Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>,
-                     Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>::new(arr
-                                                                     .into_inner()
-                                                                     .unwrap_or_else(|_| unreachable!()))
+                     Diff<UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U1>>(arr)
             .determinant()
     }
 }
@@ -216,14 +207,14 @@ fn test_det_cof_impl() {
                                          [31, 32, 34, 34, 35, 44]]);
     assert_eq!(m.determinant(), -535680);
 
-    // TODO:
-    // let m = m.into_flat_iter().map(|a| BigInt::from(a)).collect::<Matrix::<_, U3, U3>>();
-    // assert_eq!(m.determinant(), 0);
+    let m = m.map(num::BigInt::from);
+    assert_eq!(m.determinant(), num::BigInt::from(-535680));
 }
 
 pub trait Inverse {
     type Output;
 
+    /// Returns the inverse of this matrix.
     fn inverse(&self) -> Self::Output;
 }
 
@@ -243,7 +234,6 @@ impl<T> Inverse for Matrix<T, U2, U2>
 {
     type Output = Matrix<T, U2, U2>;
 
-    /// Returns inverse of the matrix.
     #[inline]
     fn inverse(&self) -> Self::Output {
         let det = self.determinant();
@@ -264,17 +254,22 @@ impl<T> Inverse for Matrix<T, U3, U3>
         let det = self.determinant();
 
         macro_rules! ms {
-            ($mat:ident : $( ($i1:ident, $j1:ident) * ($i2:ident, $j2:ident) - ($i3:ident, $j3:ident) * ($i4:ident, $j4:ident) ),*) => {
+            ($mat:ident : $( ($i1:ident, $j1:ident) * ($i2:ident, $j2:ident) -
+                             ($i3:ident, $j3:ident) * ($i4:ident, $j4:ident) ),*) => {
                 [$(
-                    idx!($mat($i1, $j1)) * idx!($mat($i2, $j2)) - idx!($mat($i3, $j3)) * idx!($mat($i4, $j4)),
+                    idx!($mat($i1, $j1)) * idx!($mat($i2, $j2)) -
+                    idx!($mat($i3, $j3)) * idx!($mat($i4, $j4)),
                 )*]
             };
         }
 
         let arr = [
-            ms![self : (U1,U1)*(U2,U2)-(U1,U2)*(U2,U1), (U0,U2)*(U2,U1)-(U0,U1)*(U2,U2), (U0,U1)*(U1,U2)-(U0,U2)*(U1,U1)],
-            ms![self : (U1,U2)*(U2,U0)-(U1,U0)*(U2,U2), (U0,U0)*(U2,U2)-(U0,U2)*(U2,U0), (U0,U2)*(U1,U0)-(U0,U0)*(U1,U2)],
-            ms![self : (U1,U0)*(U2,U1)-(U1,U1)*(U2,U0), (U0,U1)*(U2,U0)-(U0,U0)*(U2,U1), (U0,U0)*(U1,U1)-(U0,U1)*(U1,U0)],
+            ms![self : (U1,U1)*(U2,U2)-(U1,U2)*(U2,U1), (U0,U2)*(U2,U1)-(U0,U1)*(U2,U2),
+                (U0,U1)*(U1,U2)-(U0,U2)*(U1,U1)],
+            ms![self : (U1,U2)*(U2,U0)-(U1,U0)*(U2,U2), (U0,U0)*(U2,U2)-(U0,U2)*(U2,U0),
+                (U0,U2)*(U1,U0)-(U0,U0)*(U1,U2)],
+            ms![self : (U1,U0)*(U2,U1)-(U1,U1)*(U2,U0), (U0,U1)*(U2,U0)-(U0,U0)*(U2,U1),
+                (U0,U0)*(U1,U1)-(U0,U1)*(U1,U0)],
         ];
 
         Matrix::<T, U3, U3>::new(arr) / det

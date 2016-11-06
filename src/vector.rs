@@ -3,7 +3,7 @@ use typenum::consts::*;
 use typenum::operator_aliases::Mod;
 use typenum::type_operators::Same;
 
-use arrayvec::{self, ArrayVec};
+use nodrop::NoDrop;
 
 use num;
 use num::Float;
@@ -13,6 +13,7 @@ use std::marker::PhantomData;
 use std::slice::Iter as SliceIter;
 use std::slice::IterMut as SliceIterMut;
 use std::mem;
+use std::ptr;
 
 
 /// A fixed-size vector whose elements are allocated on the stack.
@@ -87,21 +88,23 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
     /// assert_eq!(it.next(), None);
     /// ```
     #[inline]
-    pub fn into_chunks<I>(self) -> VectorChunks<T, N, I>
+    pub fn into_chunks<I>(self) -> Chunks<T, N, I>
         where
             N: Rem<I>,
             Mod<N, I>: Same<U0>
     {
-        VectorChunks::new(ArrayVec::from(self.0))
+        Chunks::new(self.into_iter())
     }
 
     #[inline]
     pub unsafe fn get_unchecked(&self, i: usize) -> &T {
+        debug_assert!(i < self.len());
         self.as_slice().get_unchecked(i)
     }
 
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, i: usize) -> &mut T {
+        debug_assert!(i < self.len());
         self.as_slice_mut().get_unchecked_mut(i)
     }
 
@@ -443,31 +446,112 @@ fn test_norm() {
     assert_eq!(v.normalized(), Vector::new([0.6, 0.8]));
 }
 
-impl<T, N> IntoIterator for Vector<T, N> where N: ArrayLen<T> {
-    type Item = T;
-    type IntoIter = arrayvec::IntoIter<N::Array>;
+impl<T, N> ::std::iter::FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
+    fn from_iter<I>(iter: I) -> Self
+        where I: IntoIterator<Item = T>
+    {
+        let mut it = iter.into_iter();
 
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        ArrayVec::from(self.into_inner()).into_iter()
+        let arr = unsafe {
+            let mut arr = mem::uninitialized::<N::Array>();
+
+            for e in arr.as_mut() {
+                let item = it.next()
+                    .unwrap_or_else(|| panic!("Vector<_, U{0}> can only be created with exactly {0} elements.", N::to_usize()));
+                mem::forget(mem::replace(e, item));
+            }
+
+            debug_assert_eq!(it.count(), 0, "Vector<_, U{0}> can only be created with exactly {0} elements.", N::to_usize());
+
+            arr
+        };
+
+        Vector::new(arr)
     }
 }
 
-pub struct VectorChunks<T, N, I> where N: ArrayLen<T> {
-    it: ::arrayvec::IntoIter<N::Array>,
+impl<T, N> IntoIterator for Vector<T, N> where N: ArrayLen<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T, N>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter {
+            arr: NoDrop::new(self.into_inner()),
+            next: 0,
+            back: N::to_usize(),
+        }
+    }
+}
+
+pub struct IntoIter<T, N> where N: ArrayLen<T> {
+    arr: NoDrop<N::Array>,
+    next: usize,
+    back: usize,
+}
+
+impl<T, N> Drop for IntoIter<T, N> where N: ArrayLen<T> {
+    fn drop(&mut self) {
+        let p = self.arr.as_ref().as_ptr() as usize;
+        for i in self.next..self.back {
+            mem::drop(unsafe { ptr::read((p + i*mem::size_of::<T>()) as *const T) });
+        }
+    }
+}
+
+impl<T, N> Iterator for IntoIter<T, N> where N: ArrayLen<T> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<T> {
+        debug_assert!(self.back <= N::to_usize());
+
+        if self.next < self.back {
+            debug_assert!(self.next < N::to_usize());
+
+            let i = self.next;
+            self.next += 1;
+
+            Some(unsafe { ptr::read((self.arr.as_ref().as_ptr() as usize + i*mem::size_of::<T>()) as *const T) })
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.len();
+        (len, Some(len))
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.len()
+    }
+}
+
+impl<T, N> ExactSizeIterator for IntoIter<T, N> where N: ArrayLen<T> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.back - self.next
+    }
+}
+
+pub struct Chunks<T, N, I> where N: ArrayLen<T> {
+    it: IntoIter<T, N>,
     _i: PhantomData<I>,
 }
 
-impl<T, N, I> VectorChunks<T, N, I> where N: ArrayLen<T> {
-    fn new(a: ArrayVec<N::Array>) -> Self {
-        VectorChunks {
-            it: a.into_iter(),
+impl<T, N, I> Chunks<T, N, I> where N: ArrayLen<T> {
+    fn new(it: IntoIter<T, N>) -> Self {
+        Chunks {
+            it: it,
             _i: PhantomData,
         }
     }
 }
 
-impl<T, N, I> Iterator for VectorChunks<T, N, I>
+impl<T, N, I> Iterator for Chunks<T, N, I>
     where
         N: ArrayLen<T> + Rem<I>,
         I: ArrayLen<T>,
@@ -476,14 +560,10 @@ impl<T, N, I> Iterator for VectorChunks<T, N, I>
     type Item = Vector<T, I>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.it.size_hint().1 == Some(0) {
+        if self.it.len() == 0 { // TODO: use is_empty() when it is stabilized
             None
         } else {
-            let mut res = ArrayVec::new();
-            // `<ArrayVec as Extend>::extend` consumes only `I` items
-            res.extend(&mut self.it);
-            debug_assert!(res.is_full());
-            Some(Vector(res.into_inner().unwrap_or_else(|_| unreachable!())))
+            Some((&mut self.it).take(I::to_usize()).collect())
         }
     }
 
@@ -494,7 +574,7 @@ impl<T, N, I> Iterator for VectorChunks<T, N, I>
     }
 }
 
-impl<T, N, I> ExactSizeIterator for VectorChunks<T, N, I>
+impl<T, N, I> ExactSizeIterator for Chunks<T, N, I>
     where
         N: ArrayLen<T> + Rem<I>,
         I: ArrayLen<T>,
@@ -514,7 +594,7 @@ fn test_vector_chunks() {
 }
 
 pub trait ArrayLen<T>: typenum::Unsigned {
-    type Array: AsRef<[T]> + AsMut<[T]> + arrayvec::Array<Item = T>;
+    type Array: AsRef<[T]> + AsMut<[T]>;
 }
 
 macro_rules! impl_arraylen {

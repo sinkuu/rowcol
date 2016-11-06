@@ -4,8 +4,6 @@ pub use self::ops_impl::{Cofactor, Determinant, Inverse};
 use typenum::{self, Prod, Same, Mod, UInt};
 use typenum::consts::*;
 
-use arrayvec::ArrayVec;
-
 use num;
 
 use std::ops::{Add, Sub, Mul, Div, Neg, Rem, Index, IndexMut};
@@ -21,12 +19,18 @@ use vector::{Vector, ArrayLen};
 /// use rowcol::prelude::*;
 ///
 /// let mut m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+///
 /// assert_eq!(m.determinant(), -2);
 /// assert_eq!(m.transposed().determinant(), -2);
+/// let m2 = m * 2;
+/// assert_eq!(m2.determinant(), -8);
 ///
 /// assert_eq!(m[(0, 0)], 1);
 /// m[(0, 0)] = 2;
 /// assert_eq!(m, Matrix::new([[2, 2], [3, 4]]));
+///
+/// assert_eq!(m[(U1::new(), U1::new())], 4);
+/// // assert_eq!(m[(U2::new(), U2::new())], 1); // Error - statically checked!
 /// ```
 ///
 /// [`prelude`] provides typenum constants (`U1`, `U2`, ...), operation traits (e.g.,
@@ -55,7 +59,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     {
         unsafe {
             let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<T, Col>>>::Array>();
-            for (e, row) in arr.as_mut().into_iter().zip(ArrayVec::from(rows)) {
+            for (e, row) in arr.as_mut().into_iter().zip(Vector::<<Col as ArrayLen<T>>::Array, Row>::new(rows)) {
                 mem::forget(mem::replace(e, Vector::new(row)));
             }
             Matrix(Vector::new(arr))
@@ -170,12 +174,7 @@ impl<T, Row, Col> From<Vector<T, Prod<Row, Col>>> for Matrix<T, Row, Col>
 {
     #[inline]
     fn from(v: Vector<T, Prod<Row, Col>>) -> Self {
-        let mut res = ArrayVec::new();
-        for row in v.into_chunks::<Col>() {
-            res.push(row);
-        }
-        debug_assert!(res.is_full());
-        Matrix(Vector::new(res.into_inner().unwrap_or_else(|_| unreachable!())))
+        Matrix(v.into_chunks::<Col>().collect())
     }
 }
 
@@ -185,12 +184,13 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
         Col: ArrayLen<T> + ArrayLen<Vector<T, Row>>,
 {
-    /// Gives the transpose of this matrix.
+    /// Returns the transpose of this matrix.
     pub fn transposed(&self) -> Matrix<T, Col, Row> {
-        let arr: ArrayVec<_> = self.cols_iter().collect();
-        Matrix(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
+        Matrix(self.cols_iter().collect())
     }
 }
+
+// TODO: fn transpose(&mut self) for Matrix<T, N, N>?
 
 #[test]
 fn test_transposed() {
@@ -608,38 +608,9 @@ impl<T, Row, Col> Neg for Matrix<T, Row, Col>
     type Output = Matrix<<T as Neg>::Output, Row, Col>;
 
     fn neg(self) -> Self::Output {
-        unsafe {
-            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<<T as Neg>::Output, Col>>>::Array>();
-            for (rnew, rold) in arr.as_mut().into_iter().zip(self.0) {
-                mem::forget(mem::replace(rnew, -rold));
-            }
-            Matrix(Vector::new(arr))
-        }
+        Matrix(self.0.into_iter().map(|v| -v).collect())
     }
 }
-
-/*
-impl<T, U, Row, Col> Mul<U> for Matrix<T, Row, Col>
-    where
-        T: Mul<U>,
-        U: Clone,
-        Row: Mul<Col>,
-        Prod<Row, Col>: ArrayLen<T>,
-{
-    type Output = Matrix<<T as Mul<U>>::Output, Row, Col>;
-
-    fn mul(self, rhs: U) -> Self::Output {
-        let mut arr = ArrayVec::new();
-
-        for x in self.0 {
-            arr.push(x * rhs.clone());
-        }
-
-        debug_assert!(arr.is_full());
-        Matrix::from_flat_array(arr.into_inner().unwrap_or_else(|_| unreachable!()))
-    }
-}
-*/
 
 impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
     where
@@ -650,13 +621,7 @@ impl<T, Row, Col> Mul<T> for Matrix<T, Row, Col>
     type Output = Matrix<<T as Mul>::Output, Row, Col>;
 
     fn mul(self, rhs: T) -> Self::Output {
-        unsafe {
-            let mut arr = mem::uninitialized::<<Row as ArrayLen<Vector<<T as Mul>::Output, Col>>>::Array>();
-            for (e, row) in arr.as_mut().into_iter().zip(self.0) {
-                mem::forget(mem::replace(e, row * rhs.clone()));
-            }
-            Matrix(Vector::new(arr))
-        }
+        Matrix(self.0.into_iter().map(|row| row * rhs.clone()).collect())
     }
 }
 
@@ -941,13 +906,7 @@ impl<'a, T: 'a, Row, Col> DoubleEndedIterator
             let s = self.2;
             self.2 -= 1;
 
-            let mut arr = ArrayVec::new();
-            for x in self.0.iter().map(|row| row.iter().nth(s-1).unwrap()) { // FIXME
-                arr.push(x.clone());
-            }
-            debug_assert!(arr.is_full());
-
-            Some(Vector::new(arr.into_inner().unwrap_or_else(|_| unreachable!())))
+            Some(self.0.iter().map(|row| row.as_ref()[s-1].clone()).collect())
         } else {
             None
         }

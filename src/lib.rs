@@ -14,8 +14,8 @@
 extern crate core as std;
 
 pub extern crate typenum;
-extern crate arrayvec;
 extern crate num;
+extern crate nodrop;
 
 pub mod prelude;
 pub mod vector;
