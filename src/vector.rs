@@ -571,8 +571,8 @@ impl<T, N> FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
         let mut it = iter.into_iter();
 
         let arr = unsafe {
-            // FIXME: do not drop uninitialized
-            let mut arr = mem::uninitialized::<N::Array>();
+            // NOTE: somehow `NoDrop` drops performance - it should be optimized out
+            let mut arr = NoDrop::new(mem::uninitialized::<N::Array>());
 
             for i in 0..N::to_usize() {
                 let item = it.next()
@@ -584,7 +584,7 @@ impl<T, N> FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
             // making this `assert_eq` slows down matrix multiplication by 7x!
             debug_assert_eq!(it.count(), 0, "Vector<_, U{0}> can only be created with exactly {0} elements.", N::to_usize());
 
-            arr
+            arr.into_inner()
         };
 
         Vector::new(arr)
