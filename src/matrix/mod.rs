@@ -262,8 +262,9 @@ fn test_debug_matrix() {
 impl<T, Row, Col> Display for Matrix<T, Row, Col>
     where
         T: Display,
-        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<String, Col>>,
-        Col: ArrayLen<T> + ArrayLen<String> + ArrayLen<usize>,
+        Row: ArrayLen<Vector<T, Col>> + ArrayLen<Vector<(String, usize), Col>> +
+            ArrayLen<usize>,
+        Col: ArrayLen<T> + ArrayLen<(String, usize)> + ArrayLen<usize>,
 {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         #[cfg(feature = "unicode_width")]
@@ -277,21 +278,22 @@ impl<T, Row, Col> Display for Matrix<T, Row, Col>
         }
 
         let mut ws = Vector::<usize, Col>::default();
-        let mut hs = Vector::<usize, Col>::default();
+        let mut hs = Vector::<usize, Row>::default();
 
-        let ss: Vector<Vector<String, Col>, Row> = (0..Row::to_usize()).map(|i| {
-            (0..Col::to_usize()).map(|j| {
-                let s = format!("{}", self[(i, j)]);
+        let ss: Vector<Vector<(String, usize), Col>, Row> =
+            (0..Row::to_usize()).map(|i| {
+                (0..Col::to_usize()).map(|j| {
+                    let s = format!("{}", self[(i, j)]);
 
-                let len = s.lines().map(|l| str_len(l)).max().unwrap_or(0);
-                if ws[j] < len { ws[j] = len; }
+                    let len = s.lines().map(|l| str_len(l)).max().unwrap_or(0);
+                    if ws[j] < len { ws[j] = len; }
 
-                let lin = s.lines().count();
-                if hs[i] < lin { hs[i] = lin; }
+                    let lin = s.lines().count();
+                    if hs[i] < lin { hs[i] = lin; }
 
-                s
-            }).collect()
-        }).collect();
+                    (s, len)
+                }).collect()
+            }).collect();
 
         for (i, row) in ss.into_iter().enumerate() {
             use std::fmt::Write;
@@ -306,8 +308,7 @@ impl<T, Row, Col> Display for Matrix<T, Row, Col>
                         '⎢'
                     }));
 
-                for (j, col) in row.iter().enumerate() {
-                    let maxlen = col.lines().map(|l| str_len(l)).max().unwrap_or(0);
+                for (j, &(ref col, ref maxlen)) in row.iter().enumerate() {
                     let leftpad = (ws[j] - maxlen) / 2;
 
                     for _ in 0..leftpad { try!(f.write_char(' ')); }
@@ -342,11 +343,15 @@ fn test_display() {
     assert_eq!(format!("{}", m), "⎡111 2⎤\n\
                                   ⎣ 3  4⎦");
     let m2 = Matrix::new([[1, 2], [3, 4]]);
-    assert_eq!(format!("{}", Matrix::<Matrix<i32, U2, U2>, U2, U2>::new([[m, m2], [m2.transposed(), m]])),
+    assert_eq!(format!("{}",
+                       Matrix::<Matrix<i32, U2, U2>, U3, U2>
+                           ::new([[m, m2], [m2.transposed(), m], [m2, m.transposed()]])),
         "⎡⎡111 2⎤  ⎡1 2⎤ ⎤\n\
          ⎢⎣ 3  4⎦  ⎣3 4⎦ ⎥\n\
          ⎢ ⎡1 3⎤  ⎡111 2⎤⎥\n\
-         ⎣ ⎣2 4⎦  ⎣ 3  4⎦⎦");
+         ⎢ ⎣2 4⎦  ⎣ 3  4⎦⎥\n\
+         ⎢ ⎡1 2⎤  ⎡111 3⎤⎥\n\
+         ⎣ ⎣3 4⎦  ⎣ 2  4⎦⎦");
 }
 
 impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
