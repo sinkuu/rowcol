@@ -1,6 +1,6 @@
 [package]
 name = "rowcol"
-description = "Fixed-size vectors/matrices allocated on the stack"
+description = "Simple fixed-size vectors/matrices, allocated on the stack"
 version = "0.3.0"
 authors = ["sinkuu <sinkuupump@gmail.com>"]
 license = "MIT/Apache-2.0"
