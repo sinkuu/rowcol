@@ -209,7 +209,7 @@ impl<T, N> Eq for Vector<T, N>
 {
 }
 
-impl<T, N> num::Zero for Vector<T, N> where T: num::Zero, N: ArrayLen<T> {
+impl<T, N> num::Zero for Vector<T, N> where T: num::Zero + Clone, N: ArrayLen<T> {
     #[inline]
     fn zero() -> Self {
         Vector::generate(|_| T::zero())
@@ -311,7 +311,7 @@ macro_rules! impl_vector_arith {
     (T T : $op_trait:ident, $op_fn:ident) => {
         impl<T, U, N> $op_trait<Vector<U, N>> for Vector<T, N>
             where
-                T: $op_trait<U>,
+                T: $op_trait<U> ,
                 N: ArrayLen<T> + ArrayLen<U> + ArrayLen<<T as $op_trait<U>>::Output>,
         {
             type Output = Vector<<T as $op_trait<U>>::Output, N>;
@@ -612,9 +612,8 @@ pub struct IntoIter<T, N> where N: ArrayLen<T> {
 
 impl<T, N> Drop for IntoIter<T, N> where N: ArrayLen<T> {
     fn drop(&mut self) {
-        let p = self.arr.as_ref().as_ptr() as usize;
         for i in self.next..self.back {
-            mem::drop(unsafe { ptr::read((p + i*mem::size_of::<T>()) as *const T) });
+            mem::drop(unsafe { ptr::read(self.arr.as_ref().get_unchecked(i)) });
         }
     }
 }
@@ -630,7 +629,7 @@ impl<T, N> Iterator for IntoIter<T, N> where N: ArrayLen<T> {
             self.next += 1;
 
             Some(unsafe {
-                ptr::read((self.arr.as_ref().as_ptr() as usize + i*mem::size_of::<T>()) as *const T)
+                ptr::read(self.arr.as_ref().get_unchecked(i))
             })
         } else {
             None
@@ -657,7 +656,7 @@ impl<T, N> DoubleEndedIterator for IntoIter<T, N> where N: ArrayLen<T> {
             self.back -= 1;
 
             Some(unsafe {
-                ptr::read((self.arr.as_ref().as_ptr() as usize + self.back*mem::size_of::<T>()) as *const T)
+                ptr::read(self.arr.as_ref().get_unchecked(self.back))
             })
         } else {
             None

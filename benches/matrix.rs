@@ -36,21 +36,35 @@ fn bench_div(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_add_sub(b: &mut Bencher) {
+    let m1 = Matrix::<f32, U8, U8>::generate(|(i, j)| 0.12 * ((j+i) as f32).powi(i as i32));
+    let m2 = Matrix::<f32, U8, U8>::generate(|(i, j)| 1.234 * (j as f32 - i as f32).powi(i as i32));
+
+    b.iter(|| {
+        let mut m = m1;
+
+        m += m2;
+        m = m + m1;
+        m = m + &m1;
+        m -= m1;
+        m = m + m2;
+        m = m + &m2;
+        m
+    })
+}
+
+#[bench]
 fn bench_inv(b: &mut Bencher) {
     let m = Matrix::<f32, U8, U8>::generate(|(i, j)| 0.12 * ((j+i) as f32).powi(i as i32));
 
-    b.iter(|| {
-        m.inverse().unwrap()
-    })
+    b.iter(|| m.inverse().unwrap())
 }
 
 #[bench]
 fn bench_det(b: &mut Bencher) {
     let m = Matrix::<f32, U8, U8>::generate(|(i, j)| 0.12 * ((j+i) as f32).powi(i as i32));
 
-    b.iter(|| {
-        m.determinant()
-    })
+    b.iter(|| m.determinant())
 }
 
 #[bench]

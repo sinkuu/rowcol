@@ -539,7 +539,7 @@ impl<T, Row, Col, UICol, BICol> IndexMut<(U0, UInt<UICol, BICol>)> for Matrix<T,
 
 impl<T, Row, Col> num::Zero for Matrix<T, Row, Col>
     where
-        T: num::Zero,
+        T: num::Zero + Clone,
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
