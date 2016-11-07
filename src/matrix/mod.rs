@@ -52,11 +52,6 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Col: ArrayLen<T>,
 {
     /// Creates a new matrix.
-    ///
-    /// ```rust
-    /// # use rowcol::prelude::*;
-    /// let mat = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
-    /// ```
     pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
         -> Matrix<T, Row, Col>
     {
@@ -139,7 +134,8 @@ impl<T, N> Matrix<T, N, N>
     ///
     /// ```rust
     /// # use rowcol::prelude::*;
-    /// let id: Matrix<f32, U3, U3> = Matrix::identity();
+    /// assert_eq!(Matrix::<f32, U3, U3>::identity(),
+    ///            Matrix::generate(|(i, j)| if i == j { 1.0 } else { 0.0 }));
     /// ```
     #[inline]
     pub fn identity() -> Self {

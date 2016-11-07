@@ -15,6 +15,7 @@ macro_rules! idx {
     }
 }
 
+/// Trait for computing determinants of square matrices.
 pub trait Determinant {
     type Output;
 
@@ -22,6 +23,7 @@ pub trait Determinant {
     fn determinant(&self) -> Self::Output;
 }
 
+/// Trait for computing cofactors of square matrices.
 pub trait Cofactor {
     type Output;
 
@@ -76,20 +78,43 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
         Ba: typenum::Bit,
         Bb: typenum::Bit,
         Bc: typenum::Bit,
-        T: num::Signed + Clone,
+        T: num::Float + Clone + ::std::fmt::Display,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
-            Sub<U1> + for<'a> ArrayLen<&'a T>,
+            Sub<U1> + for<'a> ArrayLen<&'a T> + ArrayLen<usize> + ArrayLen<Vector<(String, usize), UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
+            ArrayLen<(String, usize)>,
         Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: Cofactor<Output = T>,
 {
     type Output = T;
 
     fn determinant(&self) -> T {
-        // workaround for a bug in rustc's parser (fixed in 1.13.0)
         let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
-        (0 .. n)
-            .map(|i| unsafe { self.get_unchecked((i, 0)).clone() } * self.cofactor(i, 0))
-            .fold(T::zero(), Add::add)
+
+        let mut mat = self.clone();
+
+        if (0..n).any(|i| mat[(i, i)].is_zero()) {
+            // cannot create triangular matrix, falling back
+            return (0 .. n)
+                .map(|i| {
+                    self[(i, 0)].clone() * self.cofactor(i, 0)
+                })
+                .fold(T::zero(), Add::add);
+        }
+
+        // http://thira.plavox.info/blog/2008/06/_c.html
+        for i in 0..n {
+            for j in (i+1)..n {
+                let d = mat[(j, i)].clone() / mat[(i, i)].clone();
+
+                for k in 0..n {
+                    let sub = mat[(j, k)].clone() -
+                        mat[(i, k)].clone() * d.clone();
+                    mat[(j, k)] = sub;
+                }
+            }
+        }
+
+        (0..n).map(|i| mat[(i, i)].clone()).fold(T::one(), Mul::mul)
     }
 }
 
@@ -99,7 +124,7 @@ impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
 
     #[inline]
     fn cofactor(&self, i: usize, j: usize) -> T {
-        let sgn = num::pow::pow(-T::one(), i + j);
+        let sgn = if (i + j) % 2 == 0 { T::one() } else { T::zero() };
 
         sgn * self[(1 - i, 1 - j)].clone()
     }
@@ -115,10 +140,11 @@ impl<T> Cofactor for Matrix<T, U3, U3>
     fn cofactor(&self, i: usize, j: usize) -> T {
         assert!(i < 3 && j < 3);
 
-        let sgn = num::pow::pow(-T::one(), i + j);
+        let sgn = if (i + j) % 2 == 0 { T::one() } else { T::zero() };
 
-        let arr = self.rows_iter().enumerate().filter(|&(ii, _)| ii != i).map(|(_, row)| {
-            row.into_iter().enumerate().filter(|&(jj, _)| jj != j).map(|(_, a)| a.clone()).collect()
+        let arr = self.rows_iter_ref().enumerate().filter(|&(ii, _)| ii != i).map(|(_, row)| {
+            row.into_iter().enumerate()
+                .filter(|&(jj, _)| jj != j).map(|(_, a)| a.clone()).collect()
         }).collect();
 
         sgn * Matrix::<T, U2, U2>(arr).determinant()
@@ -151,15 +177,15 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
         let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
         assert!(i < n && j < n);
 
-        let arr = self.rows_iter().enumerate().filter(|&(ii, _)| ii != i).map(|(_, row)| {
+        let arr = self.rows_iter_ref().enumerate().filter(|&(ii, _)| ii != i).map(|(_, row)| {
                 row.into_iter()
                     .enumerate()
                     .filter(|&(jj, _)| jj != j)
-                    .map(|(_, a)| a)
+                    .map(|(_, a)| a.clone())
                     .collect::<Vector<T, _>>()
             }).collect();
 
-        let sgn = num::pow::pow(-T::one(), i + j);
+        let sgn = if (i + j) % 2 == 0 { T::one() } else { T::zero() };
 
         sgn *
             Matrix::<T,
@@ -177,25 +203,25 @@ fn test_det_cof_impl() {
     let m = Matrix::<i32, U3, U3>::new([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
     assert_eq!(m.determinant(), 0);
     assert_eq!(m.cofactor(1, 1), -12);
-    let m = Matrix::<i32, U4, U4>::new([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]]);
-    assert_eq!(m.determinant(), 0);
-    let m = Matrix::<i32,  U6,  U6>::new([[1, 2, 3, 4, 5, 6],
-                                         [7, 8, 9, 10, 11, 12],
-                                         [13, 14, 15, 16, 17, 18],
-                                         [19, 20, 21, 22, 23, 24],
-                                         [25, 26, 27, 28, 29, 30],
-                                         [31, 32, 33, 34, 35, 36]]);
-    assert_eq!(m.determinant(), 0);
-    let m = Matrix::<i32,  U6,  U6>::new([[1, 1, 1, 1, 1, 63],
-                                         [7, 8, 9, 10, 11, 12],
-                                         [13, 14, 1, 18, 17, 18],
-                                         [19, 80, 81, 22, 23, 20],
-                                         [25, 26, 27, 28, 29, 30],
-                                         [31, 32, 34, 34, 35, 44]]);
-    assert_eq!(m.determinant(), -535680);
-
-    let m = m.map(num::BigInt::from);
-    assert_eq!(m.determinant(), num::BigInt::from(-535680));
+    let m = Matrix::<f32, U4, U4>::new([[1.0, 2.0, 3.0, 4.0],
+                                       [5.0, 6.0, 7.0, 8.0],
+                                       [9.0, 10.0, 11.0, 12.0],
+                                       [13.0, 14.0, 15.0, 16.0]]);
+    relative_eq!(m.determinant(), 0.0);
+    let m = Matrix::<f32,  U6,  U6>::new([[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+                                         [7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+                                         [13.0, 14.0, 15.0, 16.0, 17.0, 18.0],
+                                         [19.0, 20.0, 21.0, 22.0, 23.0, 24.0],
+                                         [25.0, 26.0, 27.0, 28.0, 29.0, 30.0],
+                                         [31.0, 32.0, 33.0, 34.0, 35.0, 36.0]]);
+    relative_eq!(m.determinant(), 0.0);
+    let m = Matrix::<f32,  U6,  U6>::new([[1.0, 1.0, 1.0, 1.0, 1.0, 63.0],
+                                         [7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+                                         [13.0, 14.0, 1.0, 18.0, 17.0, 18.0],
+                                         [19.0, 80.0, 81.0, 22.0, 23.0, 20.0],
+                                         [25.0, 26.0, 27.0, 28.0, 29.0, 30.0],
+                                         [31.0, 32.0, 34.0, 34.0, 35.0, 44.0]]);
+    relative_eq!(m.determinant(), -535680.0);
 }
 
 pub trait Inverse {
@@ -315,7 +341,7 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
 
         for i in 0..n {
             let rcp = {
-                let d = unsafe { mat.get_unchecked((i, i)).clone() };
+                let d = mat[(i, i)].clone();
                 if d.is_zero() {
                     return None;
                 }
@@ -323,25 +349,21 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
             };
 
             for j in 0..n {
-                unsafe {
-                    *mat.get_unchecked_mut((i, j)) = mat.get_unchecked((i, j)).clone() * rcp.clone();
-                    *inv.get_unchecked_mut((i, j)) = inv.get_unchecked((i, j)).clone() * rcp.clone();
-                }
+                mat[(i, j)] = mat[(i, j)].clone() * rcp.clone();
+                inv[(i, j)] = inv[(i, j)].clone() * rcp.clone();
             }
 
             for j in 0..n {
                 if i == j { continue; }
 
-                let a = unsafe { mat.get_unchecked((j, i)).clone() };
+                let a = mat[(j, i)].clone();
                 for k in 0..n {
-                    unsafe {
-                        *mat.get_unchecked_mut((j, k)) =
-                            mat.get_unchecked((j, k)).clone() -
-                            mat.get_unchecked((i, k)).clone() * a.clone();
-                        *inv.get_unchecked_mut((j, k)) =
-                            inv.get_unchecked((j, k)).clone() -
-                            inv.get_unchecked((i, k)).clone() * a.clone();
-                    }
+                    mat[(j, k)] =
+                        mat[(j, k)].clone() -
+                        mat[(i, k)].clone() * a.clone();
+                    inv[(j, k)] =
+                        inv[(j, k)].clone() -
+                        inv[(i, k)].clone() * a.clone();
                 }
             }
         }

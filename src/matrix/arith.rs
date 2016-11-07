@@ -181,10 +181,10 @@ impl<T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     type Output = Matrix<T, LRow, RCol>;
 
     fn mul(self, rhs: Matrix<T, N, RCol>) -> Self::Output {
-        Matrix(self.0.into_iter().map(|lrow| {
-            rhs.cols_iter().map(|rcol| {
+        Matrix(self.rows_iter_ref().map(|lrow| {
+            rhs.cols_iter_ref().map(|rcol| {
                 lrow.iter().cloned()
-                    .zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
+                    .zip(rcol.cloned()).map(|(a, b)| a * b).fold(T::zero(), Add::add)
             }).collect()
         }).collect())
     }
@@ -201,7 +201,7 @@ impl<'a, T, N, LRow, RCol> Mul<&'a Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     type Output = Matrix<T, LRow, RCol>;
 
     fn mul(self, rhs: &'a Matrix<T, N, RCol>) -> Self::Output {
-        Matrix(self.0.into_iter().map(|lrow| {
+        Matrix(self.rows_iter_ref().map(|lrow| {
             rhs.cols_iter_ref().map(|rcol| {
                 lrow.iter().cloned()
                     .zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
@@ -216,10 +216,10 @@ impl<T, N> MulAssign<Matrix<T, N, N>> for Matrix<T, N, N>
         N: ArrayLen<Vector<T, N>> + ArrayLen<T>,
 {
     fn mul_assign(&mut self, rhs: Matrix<T, N, N>) {
-        *self = Matrix(self.0.iter().map(|lrow| {
-            rhs.cols_iter().map(|rcol| {
+        *self = Matrix(self.rows_iter_ref().map(|lrow| {
+            rhs.cols_iter_ref().map(|rcol| {
                 lrow.iter().cloned()
-                    .zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
+                    .zip(rcol.cloned()).map(|(a, b)| a * b).fold(T::zero(), Add::add)
             }).collect()
         }).collect())
     }
@@ -243,11 +243,11 @@ impl<T, Row, Col> Mul<Vector<T, Col>> for Matrix<T, Row, Col>
     type Output = Vector<T, Row>;
 
     fn mul(self, rhs: Vector<T, Col>) -> Self::Output {
-        self.0.into_iter()
+        self.rows_iter_ref()
             .map(|row| {
                 row.into_iter()
                     .zip(rhs.iter().cloned())
-                    .map(|(a, b)| a * b).fold(T::zero(), Add::add)
+                    .map(|(a, b)| a.clone() * b).fold(T::zero(), Add::add)
             })
             .collect()
     }

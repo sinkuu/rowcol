@@ -16,6 +16,7 @@ use std::slice::{Iter as SliceIter, IterMut as SliceIterMut};
 use std::mem;
 use std::ptr;
 use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::iter::FromIterator;
 
 
 /// A fixed-size vector whose elements are allocated on the stack.
@@ -563,21 +564,23 @@ fn test_norm() {
     assert_eq!(v.normalized(), Vector::new([0.6, 0.8]));
 }
 
-impl<T, N> ::std::iter::FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
+impl<T, N> FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
     fn from_iter<I>(iter: I) -> Self
         where I: IntoIterator<Item = T>
     {
         let mut it = iter.into_iter();
 
         let arr = unsafe {
+            // FIXME: do not drop uninitialized
             let mut arr = mem::uninitialized::<N::Array>();
 
-            for e in arr.as_mut() {
+            for i in 0..N::to_usize() {
                 let item = it.next()
                     .unwrap_or_else(|| panic!("Vector<_, U{0}> can only be created with exactly {0} elements.", N::to_usize()));
-                mem::forget(mem::replace(e, item));
+                mem::forget(mem::replace(arr.as_mut().get_unchecked_mut(i), item));
             }
 
+            // making this `assert_eq` slows down matrix multiplication by 7x!
             debug_assert_eq!(it.count(), 0, "Vector<_, U{0}> can only be created with exactly {0} elements.", N::to_usize());
 
             arr

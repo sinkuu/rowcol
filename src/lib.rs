@@ -17,6 +17,7 @@ pub extern crate typenum;
 extern crate num;
 extern crate nodrop;
 #[cfg(feature = "unicode_width")] extern crate unicode_width;
+#[cfg(test)] #[macro_use] extern crate approx;
 
 pub mod prelude;
 pub mod vector;

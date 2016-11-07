@@ -176,7 +176,7 @@ impl<'a, T: 'a, Row, Col> DoubleEndedIterator
             let s = self.2;
             self.2 -= 1;
 
-            Some(self.0.iter().map(|row| row.as_ref()[s-1].clone()).collect())
+            Some(self.0.iter().map(|row| unsafe { row.as_ref().get_unchecked(s-1).clone() }).collect())
         } else {
             None
         }
