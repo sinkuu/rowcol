@@ -23,14 +23,6 @@ pub trait Determinant {
     fn determinant(&self) -> Self::Output;
 }
 
-/// Trait for computing cofactors of square matrices.
-pub trait Cofactor {
-    type Output;
-
-    /// Computes cofactor of the matrix.
-    fn cofactor(&self, i: usize, j: usize) -> Self::Output;
-}
-
 impl<T> Determinant for Matrix<T, U1, U1> where T: Clone {
     type Output = T;
 
@@ -92,18 +84,18 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
 
         let mut mat = self.clone();
 
-        if (0..n).any(|i| mat[(i, i)].is_zero()) {
-            // cannot create triangular matrix, falling back
-            return (0 .. n)
-                .map(|i| {
-                    self[(i, 0)].clone() * self.cofactor(i, 0)
-                })
-                .fold(T::zero(), Add::add);
-        }
-
         // http://thira.plavox.info/blog/2008/06/_c.html
         for i in 0..n {
             for j in (i+1)..n {
+                if mat[(i, i)].is_zero() {
+                    // cannot create triangular matrix, falling back
+                    return (0 .. n)
+                        .map(|i| {
+                            self[(i, 0)].clone() * self.cofactor(i, 0)
+                        })
+                        .fold(T::zero(), Add::add);
+                }
+
                 let d = mat[(j, i)].clone() / mat[(i, i)].clone();
 
                 for k in 0..n {
@@ -118,13 +110,21 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
     }
 }
 
+/// Trait for computing cofactors of square matrices.
+pub trait Cofactor {
+    type Output;
+
+    /// Computes cofactor of the matrix.
+    fn cofactor(&self, i: usize, j: usize) -> Self::Output;
+}
+
 impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
 {
     type Output = T;
 
     #[inline]
     fn cofactor(&self, i: usize, j: usize) -> T {
-        let sgn = if (i + j) % 2 == 0 { T::one() } else { T::zero() };
+        let sgn = if (i + j) % 2 == 0 { T::one() } else { -T::one() };
 
         sgn * self[(1 - i, 1 - j)].clone()
     }
@@ -140,7 +140,7 @@ impl<T> Cofactor for Matrix<T, U3, U3>
     fn cofactor(&self, i: usize, j: usize) -> T {
         assert!(i < 3 && j < 3);
 
-        let sgn = if (i + j) % 2 == 0 { T::one() } else { T::zero() };
+        let sgn = if (i + j) % 2 == 0 { T::one() } else { -T::one() };
 
         let arr = self.rows_iter_ref().enumerate().filter(|&(ii, _)| ii != i).map(|(_, row)| {
             row.into_iter().enumerate()
@@ -185,7 +185,7 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
                     .collect::<Vector<T, _>>()
             }).collect();
 
-        let sgn = if (i + j) % 2 == 0 { T::one() } else { T::zero() };
+        let sgn = if (i + j) % 2 == 0 { T::one() } else { -T::one() };
 
         sgn *
             Matrix::<T,
@@ -199,10 +199,12 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
 fn test_det_cof_impl() {
     let m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     assert_eq!(m.cofactor(0, 0), 4);
+    assert_eq!(m.cofactor(0, 1), -3);
     assert_eq!(m.determinant(), -2);
     let m = Matrix::<i32, U3, U3>::new([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
     assert_eq!(m.determinant(), 0);
     assert_eq!(m.cofactor(1, 1), -12);
+    assert_eq!(m.cofactor(0, 1), 6);
     let m = Matrix::<f32, U4, U4>::new([[1.0, 2.0, 3.0, 4.0],
                                        [5.0, 6.0, 7.0, 8.0],
                                        [9.0, 10.0, 11.0, 12.0],
