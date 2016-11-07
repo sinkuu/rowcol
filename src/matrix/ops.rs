@@ -11,7 +11,7 @@ use std::ops::{Add, Mul, Sub, Div, Neg};
 
 macro_rules! idx {
     ($mat:ident ( $i:ident, $j:ident )) => {
-        &$mat[($i::new(), $j::new())]
+        $mat[($i::new(), $j::new())].clone()
     }
 }
 
@@ -34,14 +34,13 @@ impl<T> Determinant for Matrix<T, U1, U1> where T: Clone {
 
     #[inline]
     fn determinant(&self) -> T {
-        idx!(self(U0, U0)).clone()
+        idx!(self(U0, U0))
     }
 }
 
 impl<T> Determinant for Matrix<T, U2, U2>
     where
-        T: Sub<T, Output = T>,
-        for<'a> &'a T: Mul<&'a T, Output = T>
+        T: Clone + Sub<T, Output = T> + Mul<T, Output = T>,
 {
     type Output = T;
 
@@ -54,8 +53,7 @@ impl<T> Determinant for Matrix<T, U2, U2>
 
 impl<T> Determinant for Matrix<T, U3, U3>
     where
-        T: Mul<T, Output = T> + for<'a> Mul<&'a T, Output = T> + Add<T, Output = T> + Sub<T, Output = T>,
-        for<'a> &'a T: Mul<&'a T, Output = T>,
+        T: Clone + Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T>,
 {
     type Output = T;
 
@@ -78,8 +76,7 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
         Ba: typenum::Bit,
         Bb: typenum::Bit,
         Bc: typenum::Bit,
-        T: num::Signed + Clone + for<'a> Mul<&'a T, Output = T>,
-        for<'a> &'a T: Mul<&'a T, Output = T>,
+        T: num::Signed + Clone,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
             Sub<U1> + for<'a> ArrayLen<&'a T>,
@@ -96,7 +93,7 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
     }
 }
 
-impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone + for<'a> Mul<&'a T, Output = T>
+impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
 {
     type Output = T;
 
@@ -104,15 +101,14 @@ impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone + for<'a> Mu
     fn cofactor(&self, i: usize, j: usize) -> T {
         let sgn = num::pow::pow(-T::one(), i + j);
 
-        sgn * &self[(1 - i, 1 - j)]
+        sgn * self[(1 - i, 1 - j)].clone()
     }
 }
 
 impl<T> Cofactor for Matrix<T, U3, U3>
     where
         U3: Mul + for<'a> ArrayLen<&'a T>,
-        T: num::Signed + Clone + for<'a> Mul<&'a T, Output = T>,
-        for<'a> &'a T: Mul<&'a T, Output = T>,
+        T: num::Signed + Clone,
 {
     type Output = T;
 
@@ -137,8 +133,7 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
         Bb: typenum::Bit,
         Bc: typenum::Bit,
 
-        T: num::Signed + Clone + for<'a> Mul<&'a T, Output = T>,
-        for<'a> &'a T: Mul<&'a T, Output = T>,
+        T: num::Signed + Clone,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
             Sub<U1> + for<'a> ArrayLen<&'a T>,
@@ -210,7 +205,7 @@ pub trait Inverse {
     fn inverse(&self) -> Option<Self::Output>;
 }
 
-impl<T> Inverse for Matrix<T, U1, U1> where T: num::Zero + num::One + for<'a> Div<&'a T, Output = T> {
+impl<T> Inverse for Matrix<T, U1, U1> where T: Clone + num::Zero + num::One + Div<T, Output = T> {
     type Output = Matrix<T, U1, U1>;
 
     #[inline]
@@ -227,7 +222,7 @@ impl<T> Inverse for Matrix<T, U1, U1> where T: num::Zero + num::One + for<'a> Di
 impl<T> Inverse for Matrix<T, U2, U2>
     where
         Matrix<T, U2, U2>: Determinant<Output = T>,
-        T: num::Zero + for<'a> Div<&'a T, Output = T> + Neg<Output = T> + Clone,
+        T: num::Zero + Div<T, Output = T> + Neg<Output = T> + Clone,
 {
     type Output = Matrix<T, U2, U2>;
 
@@ -237,8 +232,8 @@ impl<T> Inverse for Matrix<T, U2, U2>
         if det.is_zero() {
             None
         } else {
-            Some(Matrix::<T, U2, U2>::new([[idx!(self(U1,U1)).clone(), -idx!(self(U0,U1)).clone()],
-                                     [-idx!(self(U1,U0)).clone(), idx!(self(U0,U0)).clone()]]) / det)
+            Some(Matrix::<T, U2, U2>::new([[idx!(self(U1,U1)), -idx!(self(U0,U1))],
+                                     [-idx!(self(U1,U0)), idx!(self(U0,U0))]]) / det)
         }
     }
 }
@@ -246,8 +241,7 @@ impl<T> Inverse for Matrix<T, U2, U2>
 impl<T> Inverse for Matrix<T, U3, U3>
     where
         Matrix<T, U3, U3>: Determinant<Output = T>,
-        T: num::Zero + Mul<T, Output = T> + for<'a> Div<&'a T, Output = T> + Sub<T, Output = T> + Clone,
-        for<'a> &'a T: Mul<&'a T, Output = T>,
+        T: num::Zero + Mul<T, Output = T> + Div<T, Output = T> + Sub<T, Output = T> + Clone,
 {
     type Output = Matrix<T, U3, U3>;
 
@@ -307,8 +301,7 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
         Bb: typenum::Bit,
         Bc: typenum::Bit,
 
-        T: Clone +  for<'a> Div<&'a T, Output = T> + num::Signed,
-        for<'a> &'a T: Mul<&'a T, Output = T> + Sub<T, Output = T>,
+        T: Clone + num::Signed,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             typenum::Unsigned + ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>>,
 {
@@ -322,7 +315,7 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
 
         for i in 0..n {
             let rcp = {
-                let d = unsafe { mat.get_unchecked((i, i)) };
+                let d = unsafe { mat.get_unchecked((i, i)).clone() };
                 if d.is_zero() {
                     return None;
                 }
@@ -331,8 +324,8 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
 
             for j in 0..n {
                 unsafe {
-                    *mat.get_unchecked_mut((i, j)) = mat.get_unchecked((i, j)) * &rcp;
-                    *inv.get_unchecked_mut((i, j)) = inv.get_unchecked((i, j)) * &rcp;
+                    *mat.get_unchecked_mut((i, j)) = mat.get_unchecked((i, j)).clone() * rcp.clone();
+                    *inv.get_unchecked_mut((i, j)) = inv.get_unchecked((i, j)).clone() * rcp.clone();
                 }
             }
 
@@ -343,11 +336,11 @@ impl<T, U, Ba, Bb, Bc> Inverse for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UI
                 for k in 0..n {
                     unsafe {
                         *mat.get_unchecked_mut((j, k)) =
-                            mat.get_unchecked((j, k)) -
-                            mat.get_unchecked((i, k)) * &a;
+                            mat.get_unchecked((j, k)).clone() -
+                            mat.get_unchecked((i, k)).clone() * a.clone();
                         *inv.get_unchecked_mut((j, k)) =
-                            inv.get_unchecked((j, k)) -
-                            inv.get_unchecked((i, k)) * &a;
+                            inv.get_unchecked((j, k)).clone() -
+                            inv.get_unchecked((i, k)).clone() * a.clone();
                     }
                 }
             }
