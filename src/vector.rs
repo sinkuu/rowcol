@@ -576,8 +576,9 @@ impl<T, N> FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
 
             for i in 0..N::to_usize() {
                 let item = it.next()
-                    .unwrap_or_else(|| panic!("Vector<_, U{0}> can only be created with exactly {0} elements.", N::to_usize()));
-                mem::forget(mem::replace(arr.as_mut().get_unchecked_mut(i), item));
+                    .unwrap_or_else(|| panic!("Vector<_, U{0}> can only be created with exactly {0} elements.",
+                                              N::to_usize()));
+                ptr::write(arr.as_mut().get_unchecked_mut(i), item);
             }
 
             // making this `assert_eq` slows down matrix multiplication by 7x!
