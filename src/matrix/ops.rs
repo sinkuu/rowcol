@@ -15,6 +15,26 @@ macro_rules! idx {
     }
 }
 
+impl<T, Row, Col> Matrix<T, Row, Col>
+    where
+        T: Clone + num::Zero + Add<T, Output = T>,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    pub fn sum(&self) -> T {
+        self.0.iter().map(|row| {
+                row.iter().cloned().fold(T::zero(), Add::add)
+            })
+            .fold(T::zero(), Add::add)
+    }
+}
+
+#[test]
+fn test_sum() {
+    let m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    assert_eq!(m.sum(), 10);
+}
+
 /// Trait for computing determinants of square matrices.
 pub trait Determinant {
     type Output;
