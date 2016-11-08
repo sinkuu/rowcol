@@ -4,10 +4,10 @@ use typenum::consts::*;
 use typenum::operator_aliases::Mod;
 use typenum::type_operators::Same;
 
-use nodrop::NoDrop;
-
 use num;
 use num::Float;
+
+use nodrop::NoDrop;
 
 use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Neg, Rem,
     AddAssign, SubAssign, MulAssign, DivAssign, Index, IndexMut};
@@ -560,8 +560,26 @@ impl<T, N> Vector<T, N>
 #[test]
 fn test_norm() {
     let v = Vector::<f32, U2>::new([3.0, 4.0]);
-    assert_eq!(v.norm(), 5.0);
-    assert_eq!(v.normalized(), Vector::new([0.6, 0.8]));
+    assert_relative_eq!(v.norm(), 5.0);
+    let n = v.normalized();
+    assert_relative_eq!(n[0], 0.6);
+    assert_relative_eq!(n[1], 0.8);
+}
+
+impl<T, N> Vector<T, N>
+    where
+        T: Clone + num::Zero + Add<T, Output = T>,
+        N: ArrayLen<T>,
+{
+    pub fn sum(&self) -> T {
+        self.iter().cloned().fold(T::zero(), Add::add)
+    }
+}
+
+#[test]
+fn test_sum() {
+    let v = Vector::<i32, U2>::new([1, 2]);
+    assert_eq!(v.sum(), 3);
 }
 
 impl<T, N> FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
