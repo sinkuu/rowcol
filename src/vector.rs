@@ -707,13 +707,23 @@ impl<T, N> FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
             let mut arr = NoDrop::new(mem::uninitialized::<N::Array>());
 
             for i in 0..N::to_usize() {
-                let item = it.next()
-                    .unwrap_or_else(|| panic!("Vector<_, U{0}> can only be created with exactly {0} elements.",
-                                              N::to_usize()));
+                let item = match it.next() {
+                    Some(item) => item,
+                    None => {
+                        let mut arr = arr.into_inner();
+                        for j in 0..i {
+                            mem::drop(ptr::read(arr.as_mut().get_unchecked_mut(j)));
+                        }
+                        mem::forget(arr);
+
+                        panic!("Vector<_, U{0}> can only be created with exactly {0} elements.",
+                               N::to_usize())
+                    }
+                };
                 ptr::write(arr.as_mut().get_unchecked_mut(i), item);
             }
 
-            // making this `assert_eq` slows down matrix multiplication by 7x!
+            // making this `assert_eq` slows down matrix multiplication by 7x in release build!
             debug_assert_eq!(it.count(), 0, "Vector<_, U{0}> can only be created with exactly {0} elements.", N::to_usize());
 
             arr.into_inner()
