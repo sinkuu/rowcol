@@ -9,6 +9,8 @@ use num::Float;
 
 use nodrop::NoDrop;
 
+use odds::debug_assert_unreachable;
+
 use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Neg, Rem,
     AddAssign, SubAssign, MulAssign, DivAssign, Index, IndexMut};
 use std::marker::PhantomData;
@@ -17,6 +19,7 @@ use std::mem;
 use std::ptr;
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::iter::FromIterator;
+use std::cmp::{self, Ordering};
 
 
 /// A fixed-size vector whose elements are allocated on the stack.
@@ -571,6 +574,7 @@ impl<T, N> Vector<T, N>
         T: Clone + num::Zero + Add<T, Output = T>,
         N: ArrayLen<T>,
 {
+    /// Returns the sum of the entries in this vector.
     pub fn sum(&self) -> T {
         self.iter().cloned().fold(T::zero(), Add::add)
     }
@@ -580,6 +584,116 @@ impl<T, N> Vector<T, N>
 fn test_sum() {
     let v = Vector::<i32, U2>::new([1, 2]);
     assert_eq!(v.sum(), 3);
+}
+
+impl<T, U, B> Vector<T, UInt<U, B>>
+    where
+        U: typenum::Unsigned,
+        B: typenum::Bit,
+        T: Clone + Ord,
+        UInt<U, B>: ArrayLen<T>,
+{
+    /// Returns the maximum of all elements of this vector.
+    ///
+    /// `Vector<T, U0>` does not have this method.
+    ///
+    /// Note: Floating point numbers do not have total orders (`Ord` trait) due to NaN.
+    /// Consider using [ordered-float](https://docs.rs/crate/ordered-float/0.2.3) crate
+    /// if you need to use these comparison functionalities and you are sure that
+    /// your vector contains no NaNs.
+    #[inline]
+    pub fn max(&self) -> T {
+        match self.iter().cloned().max() {
+            Some(m) => m,
+            None => unsafe { debug_assert_unreachable() },
+        }
+    }
+
+    /// Returns the minimum of all elements of this vector.
+    ///
+    /// `Vector<T, U0>` does not have this method.
+    #[inline]
+    pub fn min(&self) -> T {
+        match self.iter().cloned().min() {
+            Some(m) => m,
+            None => unsafe { debug_assert_unreachable() },
+        }
+    }
+}
+
+impl<T, U, B> Vector<T, UInt<U, B>>
+    where
+        U: typenum::Unsigned,
+        B: typenum::Bit,
+        T: Clone,
+        UInt<U, B>: ArrayLen<T>,
+{
+    /// Returns the maximum of all elements of this vector, using supplied comparison function.
+    ///
+    /// `Vector<T, U0>` does not have this method.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use rowcol::prelude::*;
+    /// let v = Vector::<i32, U3>::new([-1, 2, -3]);
+    /// assert_eq!(v.max(), 2);
+    /// assert_eq!(v.max_by(|a, b| a.abs().cmp(&b.abs())), -3);
+    /// ```
+    pub fn max_by<F>(&self, mut comp: F) -> T where F: FnMut(&T, &T) -> Ordering {
+        let mut it = self.iter();
+        let mut st = it.next().unwrap_or_else(|| unsafe { debug_assert_unreachable() });
+
+        for v in it {
+            if comp(v, st) == Ordering::Greater {
+                st = v;
+            }
+        }
+
+        st.clone()
+    }
+
+    /// Returns the minimum of all elements of this vector, using supplied comparison function.
+    ///
+    /// `Vector<T, U0>` does not have this method.
+    pub fn min_by<F>(&self, mut comp: F) -> T where F: FnMut(&T, &T) -> Ordering {
+        self.max_by(|a, b| comp(b, a))
+    }
+}
+
+#[test]
+fn test_minmax() {
+    let v = Vector::<i32, U3>::new([1, 2, 3]);
+    assert_eq!(v.max(), 3);
+    assert_eq!(v.min(), 1);
+    assert_eq!(v.max_by(|a, b| (a - 5).abs().cmp(&(b - 5).abs())), 1);
+    assert_eq!(v.min_by(|a, b| (a - 5).abs().cmp(&(b - 5).abs())), 3);
+}
+
+impl<T, N> Vector<T, N>
+    where
+        T: Clone + Ord,
+        N: ArrayLen<T>,
+{
+    /// Returns the clamped version of this vector to `[min, max]`.
+    pub fn clamped(&self, min: T, max: T) -> Vector<T, N> {
+        self.iter().cloned().map(|v| cmp::min(&max, cmp::max(&min, &v)).clone()).collect()
+    }
+
+    /// Clamps this vector to `[min, max]`.
+    pub fn clamp(&mut self, min: T, max: T) {
+        for v in self.iter_mut() {
+            *v = cmp::min(&max, cmp::max(&min, v)).clone();
+        }
+    }
+}
+
+#[test]
+fn test_clamp() {
+    let mut v = Vector::<i32, U3>::new([1, 5, 8]);
+    assert_eq!(v.clamped(4, 6), Vector::new([4, 5, 6]));
+    v.clamp(3, 4);
+    assert_eq!(v, Vector::new([3, 4, 4]));
 }
 
 impl<T, N> FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
@@ -786,6 +900,7 @@ macro_rules! impl_arraylen {
     }
 }
 
+impl_arraylen!(U0, 0);
 impl_arraylen!(U1, 1);
 impl_arraylen!(U2, 2);
 impl_arraylen!(U3, 3);

@@ -1,6 +1,6 @@
-//! `rowcol` crate provides fixed-size [`Vector`] and [`Matrix`].
+//! rowcol crate provides fixed-size [`Vector`] and [`Matrix`].
 //! Their length or number of rows/columns are specified as type parameters,
-//! using type-level numbers provided by `typenum` crate.
+//! using type-level numbers provided by [typenum](https://docs.rs/crate/typenum/1.5.1) crate.
 //! This lets vectors and matrices be internally represented as fixed-length arrays,
 //! therefore they are allocated on the stack, and becomes `Copy` if their content
 //! is `Copy`. Also, errors like computing the determinant of a non-square matrix
@@ -16,6 +16,7 @@ extern crate core as std;
 pub extern crate typenum;
 extern crate num;
 extern crate nodrop;
+extern crate odds;
 #[cfg(feature = "unicode_width")] extern crate unicode_width;
 #[cfg(test)] #[macro_use] extern crate approx;
 
