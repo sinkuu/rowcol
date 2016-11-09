@@ -1,4 +1,4 @@
-use super::Matrix;
+use super::{Matrix, MatrixIdx};
 use ::vector::{Vector, ArrayLen};
 
 use typenum;
@@ -13,26 +13,6 @@ macro_rules! idx {
     ($mat:ident ( $i:ident, $j:ident )) => {
         $mat[($i::new(), $j::new())].clone()
     }
-}
-
-impl<T, Row, Col> Matrix<T, Row, Col>
-    where
-        T: Clone + num::Zero + Add<T, Output = T>,
-        Row: ArrayLen<Vector<T, Col>>,
-        Col: ArrayLen<T>,
-{
-    pub fn sum(&self) -> T {
-        self.0.iter().map(|row| {
-                row.iter().cloned().fold(T::zero(), Add::add)
-            })
-            .fold(T::zero(), Add::add)
-    }
-}
-
-#[test]
-fn test_sum() {
-    let m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
-    assert_eq!(m.sum(), 10);
 }
 
 /// Trait for computing determinants of square matrices.
@@ -111,7 +91,7 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
                     // cannot create triangular matrix, falling back
                     return (0 .. n)
                         .map(|i| {
-                            self[(i, 0)].clone() * self.cofactor(i, 0)
+                            self[(i, 0)].clone() * self.cofactor((i, 0))
                         })
                         .fold(T::zero(), Add::add);
                 }
@@ -135,7 +115,7 @@ pub trait Cofactor {
     type Output;
 
     /// Computes cofactor of the matrix.
-    fn cofactor(&self, i: usize, j: usize) -> Self::Output;
+    fn cofactor(&self, idx: MatrixIdx) -> Self::Output;
 }
 
 impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
@@ -143,7 +123,7 @@ impl<T> Cofactor for Matrix<T, U2, U2> where T: num::Signed + Clone
     type Output = T;
 
     #[inline]
-    fn cofactor(&self, i: usize, j: usize) -> T {
+    fn cofactor(&self, (i, j): MatrixIdx) -> T {
         let sgn = if (i + j) % 2 == 0 { T::one() } else { -T::one() };
 
         sgn * self[(1 - i, 1 - j)].clone()
@@ -157,7 +137,7 @@ impl<T> Cofactor for Matrix<T, U3, U3>
 {
     type Output = T;
 
-    fn cofactor(&self, i: usize, j: usize) -> T {
+    fn cofactor(&self, (i, j): MatrixIdx) -> T {
         assert!(i < 3 && j < 3);
 
         let sgn = if (i + j) % 2 == 0 { T::one() } else { -T::one() };
@@ -193,7 +173,7 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
 {
     type Output = T;
 
-    fn cofactor(&self, i: usize, j: usize) -> T {
+    fn cofactor(&self, (i, j): MatrixIdx) -> T {
         let n = <UInt<UInt<UInt<U, Ba>, Bb>, Bc> as typenum::Unsigned>::to_usize();
         assert!(i < n && j < n);
 
@@ -218,13 +198,13 @@ impl<T, U, Ba, Bb, Bc> Cofactor for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, U
 #[test]
 fn test_det_cof_impl() {
     let m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
-    assert_eq!(m.cofactor(0, 0), 4);
-    assert_eq!(m.cofactor(0, 1), -3);
+    assert_eq!(m.cofactor((0, 0)), 4);
+    assert_eq!(m.cofactor((0, 1)), -3);
     assert_eq!(m.determinant(), -2);
     let m = Matrix::<i32, U3, U3>::new([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
     assert_eq!(m.determinant(), 0);
-    assert_eq!(m.cofactor(1, 1), -12);
-    assert_eq!(m.cofactor(0, 1), 6);
+    assert_eq!(m.cofactor((1, 1)), -12);
+    assert_eq!(m.cofactor((0, 1)), 6);
     let m = Matrix::<f32, U4, U4>::new([[1.0, 2.0, 3.0, 4.0],
                                        [5.0, 6.0, 7.0, 8.0],
                                        [9.0, 10.0, 11.0, 12.0],
@@ -329,14 +309,14 @@ fn test_hard_coded_inverse() {
     use num::rational::Ratio;
     use num::{BigInt, ToPrimitive};
 
-    let m = Matrix::<i32, U2, U2>::new([[1, 5], [2, 4]]).map(|x| Ratio::from_integer(BigInt::from(x)));
+    let m = Matrix::<i32, U2, U2>::new([[1, 5], [2, 4]]).map(|_, x| Ratio::from_integer(BigInt::from(x)));
     let mi = m.inverse().unwrap();
-    assert_eq!((mi * Ratio::from_integer(BigInt::from(6))).map(|a| a.to_integer().to_i32().unwrap()),
+    assert_eq!((mi * Ratio::from_integer(BigInt::from(6))).map(|_, a| a.to_integer().to_i32().unwrap()),
         Matrix::new([[-4, 5], [2, -1]]));
 
-    let m = Matrix::<i32, U3, U3>::new([[1, 5, 3], [2, 4, 1], [2, 2, 2]]).map(Ratio::from_integer);
+    let m = Matrix::<i32, U3, U3>::new([[1, 5, 3], [2, 4, 1], [2, 2, 2]]).map(|_, a| Ratio::from_integer(a));
     let mi = m.inverse().unwrap();
-    assert_eq!((mi * Ratio::from_integer(16)).map(|a| a.to_integer()),
+    assert_eq!((mi * Ratio::from_integer(16)).map(|_, a| a.to_integer()),
                Matrix::new([[-6, 4, 7], [2, 4, -5], [4, -8, 6]]));
 }
 
@@ -402,9 +382,9 @@ fn test_inverse() {
                                        [1, 5, 3, 1],
                                        [2, 4, 1, 2],
                                        [2, 2, 2, 1],
-                                       [1, 5, 1, 1]]).map(Ratio::from_integer);
+                                       [1, 5, 1, 1]]).map(|_, a| Ratio::from_integer(a));
     let mi = m.inverse().unwrap();
-    assert_eq!((mi * Ratio::from_integer(12)).map(|a| a.to_integer()),
+    assert_eq!((mi * Ratio::from_integer(12)).map(|_, a| a.to_integer()),
         Matrix::new([
                     [-9, -6, 12, 9],
                     [-1, -2, 0, 5],

@@ -210,6 +210,46 @@ impl<'a, T, N, LRow, RCol> Mul<&'a Matrix<T, N, RCol>> for Matrix<T, LRow, N>
     }
 }
 
+impl<'a, 'b, T, N, LRow, RCol> Mul<&'a Matrix<T, N, RCol>> for &'b Matrix<T, LRow, N>
+    where
+        T: Clone + num::Zero + Add<T, Output = T> + Mul<&'a T, Output = T>,
+        N: ArrayLen<Vector<T, RCol>> +
+           ArrayLen<T>,
+        RCol: ArrayLen<T>,
+        LRow: ArrayLen<Vector<T, RCol>> + ArrayLen<Vector<T, N>>,
+{
+    type Output = Matrix<T, LRow, RCol>;
+
+    fn mul(self, rhs: &'a Matrix<T, N, RCol>) -> Self::Output {
+        Matrix(self.rows_iter_ref().map(|lrow| {
+            rhs.cols_iter_ref().map(|rcol| {
+                lrow.iter().cloned()
+                    .zip(rcol).map(|(a, b)| a * b).fold(T::zero(), Add::add)
+            }).collect()
+        }).collect())
+    }
+}
+
+impl<'a,T, N, LRow, RCol> Mul<Matrix<T, N, RCol>> for &'a Matrix<T, LRow, N>
+    where
+        T: Clone + num::Zero + Add<T, Output = T> + Mul<T, Output = T>,
+        N: ArrayLen<Vector<T, RCol>> +
+           ArrayLen<T>,
+        RCol: ArrayLen<T>,
+        LRow: ArrayLen<Vector<T, RCol>> + ArrayLen<Vector<T, N>>,
+{
+    type Output = Matrix<T, LRow, RCol>;
+
+    fn mul(self, rhs: Matrix<T, N, RCol>) -> Self::Output {
+        Matrix(self.rows_iter_ref().map(|lrow| {
+            rhs.cols_iter_ref().map(|rcol| {
+                lrow.iter().cloned()
+                    .zip(rcol.cloned()).map(|(a, b)| a * b).fold(T::zero(), Add::add)
+            }).collect()
+        }).collect())
+    }
+}
+
 impl<T, N> MulAssign<Matrix<T, N, N>> for Matrix<T, N, N>
     where
         T: Clone + num::Zero + Add<T, Output = T> + Mul<T, Output = T>,
@@ -356,6 +396,8 @@ fn test_matrix_arith() {
     assert_eq!(m5[(1,0)], 3);
     assert_eq!((m5 + m5 - m5)[(1,0)], 3);
     assert_eq!(m4 * m5 * 2, Matrix::new([[2], [18]]));
+    assert_eq!(&m4 * m5 * 2, Matrix::new([[2], [18]]));
+    assert_eq!(&m4 * &m5 * 2, Matrix::new([[2], [18]]));
     assert_eq!(m4 * &m5 * 2 / 2, Matrix::new([[1], [9]]));
     assert_eq!(m5 * &Vector::<i32, U1>::new([2]), Vector::new([2, 6]));
 

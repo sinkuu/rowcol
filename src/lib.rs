@@ -6,6 +6,21 @@
 //! is `Copy`. Also, errors like computing the determinant of a non-square matrix
 //! can be detected at compile-time, instead of causing runtime panic.
 //!
+//! ```rust
+//! use rowcol::prelude::*;
+//!
+//! fn fib(n: usize) -> u64 {
+//!     let f = Vector::<u64, U2>::new([1, 0]);
+//!     let a = Matrix::<u64, U2, U2>::new([[1, 1], [1, 0]]);
+//!
+//!     (a.pow(n) * f)[1]
+//! }
+//!
+//! assert_eq!(fib(0), 0);
+//! assert_eq!(fib(10), 55);
+//! assert_eq!(fib(50), 12586269025);
+//! ```
+//!
 //! [`Vector`]: ./vector/struct.Vector.html
 //! [`Matrix`]: ./matrix/struct.Matrix.html
 
@@ -18,7 +33,7 @@ extern crate num;
 extern crate nodrop;
 extern crate odds;
 #[cfg(feature = "unicode_width")] extern crate unicode_width;
-#[cfg(test)] #[macro_use] extern crate approx;
+#[macro_use] extern crate approx;
 
 pub mod prelude;
 pub mod vector;

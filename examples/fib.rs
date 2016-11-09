@@ -9,7 +9,7 @@ fn main() {
 
     let mut p = Matrix::<u64, U2, U2>::identity();
 
-    for n in 0..51 {
+    for n in 0..50 {
         println!("fib({:2}) = {}", n, (p * f)[1]);
         p *= a;
     }

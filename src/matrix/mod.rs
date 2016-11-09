@@ -12,35 +12,56 @@ use typenum::consts::*;
 use num;
 use num::Complex;
 
-use std::ops::{Mul, Rem, Neg, Index, IndexMut};
+use approx::ApproxEq;
+
+use std::ops::{Add, Mul, Rem, Neg, Index, IndexMut};
 use std::fmt::{Debug, Display, Formatter};
 use std::fmt::Result as FmtResult;
 
 use vector::{Vector, ArrayLen};
 
+/// When indexing a matrix, tuple `(row, column)` (both are `usize` and zero-based index) is used.
+pub type MatrixIdx = (usize, usize);
+
 /// A fixed-size matrix allocated on the stack.
+///
+/// # Examples
 ///
 /// ```rust
 /// use rowcol::prelude::*;
 ///
-/// let mut m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+/// let mut m = Matrix2f32::new([[1.0, 2.0], [3.0, 4.0]]);
+/// // Matrix2f32 is the alias for Matrix<f32, U2, U2>
 ///
-/// assert_eq!(m.transposed().determinant(), -2);
-/// assert_eq!((m * 2).determinant(), -8);
+/// assert_eq!(m.transposed().determinant(), -2.0);
+/// assert_eq!((m * 2.0).determinant(), -8.0);
+/// assert_eq!(m * m.inverse().unwrap(), Matrix::identity());
 ///
-/// assert_eq!(m[(0, 0)], 1);
-/// m[(0, 0)] = 2;
-/// assert_eq!(m, Matrix::new([[2, 2], [3, 4]]));
-///
-/// assert_eq!(m[(U1::new(), U1::new())], 4);
-/// // assert_eq!(m[(U2::new(), U2::new())], 1); // Error - statically checked!
+/// m += m * m;
+/// m /= 2.0;
+/// m *= Matrix::new([[1.0, 2.0], [3.0, 4.0]]);
 /// ```
 ///
-/// [`prelude`] provides typenum constants (`U1`, `U2`, ...), operation traits (e.g.,
-/// [`Determinant`]), and alias for `Matrix`.
+/// Indexing:
+///
+/// ```rust
+/// # use rowcol::prelude::*;
+/// let mut m = Matrix2f32::new([[1.0, 2.0], [3.0, 4.0]]);
+///
+/// assert_eq!(m[(0, 0)], 1.0);
+/// m[(0, 0)] += 1.0;
+/// assert_eq!(m, Matrix::new([[2.0, 2.0], [3.0, 4.0]]));
+///
+/// // statically checked indexing
+/// assert_eq!(m[(U1::new(), U1::new())], 4.0);
+/// // assert_eq!(m[(U2::new(), U2::new())], 1.0); // error
+/// ```
+///
+/// [`prelude`] provides typenum constants (`U0`, `U1`, `U2`, ...), matrix operation traits (e.g.,
+/// [`Determinant`]), and aliases for `Matrix` (e.g., `Matrix2f32`).
 ///
 /// [`prelude`]: ../prelude/index.html
-/// [`Determinant`]: ../prelude/trait.Determinant.html
+/// [`Determinant`]: ./ops/trait.Determinant.html
 pub struct Matrix<T, Row, Col>(Vector<Vector<T, Col>, Row>)
     where
         Col: ArrayLen<T>,
@@ -83,33 +104,33 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Col::to_usize()
     }
 
-    pub fn generate<F>(mut f: F) -> Self where F: FnMut((usize, usize)) -> T {
+    pub fn generate<F>(mut f: F) -> Self where F: FnMut(MatrixIdx) -> T {
         Matrix((0..Row::to_usize()).map(|i| Vector::generate(|j| f((i, j)))).collect())
     }
 
-    pub fn all<F>(&self, mut pred: F) -> bool where F: FnMut((usize, usize), &T) -> bool {
+    pub fn all<F>(&self, mut pred: F) -> bool where F: FnMut(MatrixIdx, &T) -> bool {
         self.0.iter()
             .enumerate()
             .all(|(i, col)| col.iter().enumerate().all(|(j, v)| pred((i, j), v)))
     }
 
-    pub fn any<F>(&self, mut pred: F) -> bool where F: FnMut((usize, usize), &T) -> bool {
+    pub fn any<F>(&self, mut pred: F) -> bool where F: FnMut(MatrixIdx, &T) -> bool {
         self.0.iter().enumerate().any(|(i, col)| col.iter().enumerate().any(|(j, v)| pred((i, j), v)))
     }
 
     pub fn map<F, U>(self, mut f: F) -> Matrix<U, Row, Col>
         where
-            F: FnMut(T) -> U,
+            F: FnMut(MatrixIdx, T) -> U,
             Row: ArrayLen<Vector<U, Col>>,
             Col: ArrayLen<U>,
     {
-        Matrix(self.0.into_iter()
-               .map(|row| row.into_iter().map(|a| f(a)).collect())
+        Matrix(self.0.into_iter().enumerate()
+               .map(|(i, row)| row.into_iter().enumerate().map(|(j, a)| f((i, j), a)).collect())
                .collect())
     }
 
     #[inline]
-    pub unsafe fn get_unchecked(&self, (i, j): (usize, usize)) -> &T {
+    pub unsafe fn get_unchecked(&self, (i, j): MatrixIdx) -> &T {
         debug_assert!(i < Row::to_usize());
         debug_assert!(j < Col::to_usize());
 
@@ -117,7 +138,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     }
 
     #[inline]
-    pub unsafe fn get_unchecked_mut(&mut self, (i, j): (usize, usize)) -> &mut T {
+    pub unsafe fn get_unchecked_mut(&mut self, (i, j): MatrixIdx) -> &mut T {
         debug_assert!(i < Row::to_usize());
         debug_assert!(j < Col::to_usize());
 
@@ -350,7 +371,7 @@ fn test_display() {
          ⎣ ⎣3 4⎦  ⎣ 2  4⎦⎦");
 }
 
-impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
+impl<T, Row, Col> Index<MatrixIdx> for Matrix<T, Row, Col>
     where
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
@@ -358,18 +379,18 @@ impl<T, Row, Col> Index<(usize, usize)> for Matrix<T, Row, Col>
     type Output = T;
 
     #[inline]
-    fn index(&self, (i, j): (usize, usize)) -> &T {
+    fn index(&self, (i, j): MatrixIdx) -> &T {
         &self.0[i][j]
     }
 }
 
-impl<T, Row, Col> IndexMut<(usize, usize)> for Matrix<T, Row, Col>
+impl<T, Row, Col> IndexMut<MatrixIdx> for Matrix<T, Row, Col>
     where
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
     #[inline]
-    fn index_mut(&mut self, (i, j): (usize, usize)) -> &mut T {
+    fn index_mut(&mut self, (i, j): MatrixIdx) -> &mut T {
         &mut self.0.as_slice_mut()[i].as_slice_mut()[j]
     }
 }
@@ -597,6 +618,16 @@ impl<T, N> num::One for Matrix<T, N, N>
     }
 }
 
+impl<T, N> Matrix<T, N, N>
+    where
+        T: num::One + num::Zero + Add<T, Output = T> + Mul<T, Output = T> + Clone,
+        N: ArrayLen<Vector<T, N>> + ArrayLen<T>,
+{
+    pub fn pow(&self, exp: usize) -> Matrix<T, N, N> {
+        num::pow::pow(self.clone(), exp)
+    }
+}
+
 impl<T, Row, Col> Matrix<Complex<T>, Row, Col>
     where
         T: Neg<Output = T> + num::Num + Clone,
@@ -605,7 +636,7 @@ impl<T, Row, Col> Matrix<Complex<T>, Row, Col>
 {
     #[inline]
     pub fn conjugate(&self) -> Matrix<Complex<T>, Row, Col> {
-        self.clone().map(|a| a.conj())
+        self.clone().map(|_, a| a.conj())
     }
 }
 
@@ -616,6 +647,27 @@ fn test_conjugate() {
                                             [Complex::new(-2,1), Complex::new(1,1)]]);
     assert!((m.conjugate() + m).all(|_, a| a.im == 0));
 }
+
+impl<T, Row, Col> Matrix<T, Row, Col>
+    where
+        T: Clone + num::Zero + Add<T, Output = T>,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    pub fn sum(&self) -> T {
+        self.0.iter().map(|row| {
+                row.iter().cloned().fold(T::zero(), Add::add)
+            })
+            .fold(T::zero(), Add::add)
+    }
+}
+
+#[test]
+fn test_sum() {
+    let m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    assert_eq!(m.sum(), 10);
+}
+
 
 impl<T, Row, Col> Matrix<T, Row, Col>
     where
@@ -653,3 +705,43 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         ColsIterRef::new(&self.0)
     }
 }
+
+impl<T, Row, Col> ApproxEq for Matrix<T, Row, Col>
+    where
+        T: ApproxEq,
+        T::Epsilon: Clone,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    type Epsilon = T::Epsilon;
+
+    #[inline]
+    fn default_epsilon() -> T::Epsilon {
+        T::default_epsilon()
+    }
+
+    #[inline]
+    fn default_max_relative() -> T::Epsilon {
+        T::default_max_relative()
+    }
+
+    #[inline]
+    fn default_max_ulps() -> u32 {
+        T::default_max_ulps()
+    }
+
+    fn relative_eq(&self, other: &Self, epsilon: T::Epsilon, max_relative: T::Epsilon) -> bool {
+        self.rows_iter_ref().zip(other.rows_iter_ref())
+            .map(|(ra, rb)| {
+                ra.iter().zip(rb.iter()).all(|(a, b)| a.relative_eq(b, epsilon.clone(), max_relative.clone()))
+            }).fold(true, |x, y| x && y)
+    }
+
+    fn ulps_eq(&self, other: &Self, epsilon: T::Epsilon, max_ulps: u32) -> bool {
+        self.rows_iter_ref().zip(other.rows_iter_ref())
+            .map(|(ra, rb)| {
+                ra.iter().zip(rb.iter()).all(|(a, b)| a.ulps_eq(b, epsilon.clone(), max_ulps))
+            }).fold(true, |x, y| x && y)
+    }
+}
+

@@ -14,13 +14,8 @@ typenum = "1.5.0"
 num = "0.1.36"
 unicode-width = { version = "0.1.3", optional = true }
 odds = "0.2.24"
-
-[dev-dependencies]
-approx = "0.1.1"
-
-[dependencies.nodrop]
-version = "0.1.8"
-default-features = false
+approx = { version = "0.1.1" }
+nodrop = { version = "0.1.8", default-features = false }
 
 [features]
 default = ["std", "unicode_width"]
