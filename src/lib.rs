@@ -31,7 +31,6 @@ extern crate core as std;
 pub extern crate typenum;
 extern crate num;
 extern crate nodrop;
-extern crate odds;
 #[cfg(feature = "unicode_width")] extern crate unicode_width;
 #[macro_use] extern crate approx;
 

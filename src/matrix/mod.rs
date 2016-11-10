@@ -14,8 +14,6 @@ use num::Complex;
 
 use approx::ApproxEq;
 
-use odds::debug_assert_unreachable;
-
 use std::ops::{Add, Mul, Rem, Neg, Index, IndexMut};
 use std::cmp::{self, Ordering};
 use std::fmt::{Debug, Display, Formatter};
@@ -72,13 +70,12 @@ pub struct Matrix<T, Row, Col>(Vector<Vector<T, Col>, Row>)
         Row: ArrayLen<Vector<T, Col>>;
 
 impl<T, Row, Col> Matrix<T, Row, Col>
-    where
-        Row: ArrayLen<<Col as ArrayLen<T>>::Array> + ArrayLen<Vector<T, Col>>,
-        Col: ArrayLen<T>,
+    where Row: ArrayLen<Vector<T, Col>>, Col: ArrayLen<T>
 {
     /// Creates a new matrix.
     pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
         -> Matrix<T, Row, Col>
+        where Row: ArrayLen<<Col as ArrayLen<T>>::Array>,
     {
         Matrix(Vector::<<Col as ArrayLen<T>>::Array, Row>::new(rows).into_iter()
                .map(Vector::new).collect())
@@ -103,21 +100,19 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         let mut elems = Vector::<T, Min<Row, Col>>::new(elems).into_iter();
         Matrix::generate(|(i, j)| {
             if i == j {
-                elems.next().unwrap_or_else(||
-                    unsafe {  debug_assert_unreachable() })
+                elems.next().unwrap() // never panic
             } else {
                 T::zero()
             }
         })
     }
-}
 
-impl<T, Row, Col> Matrix<T, Row, Col>
-    where
-        Row: ArrayLen<Vector<T, Col>>,
-        Col: ArrayLen<T>,
-{
     /// Number of rows and columns in this matrix.
+    ///
+    /// ```rust
+    /// # use rowcol::prelude::*;
+    /// assert_eq!(Matrix3f32::identity().dim(), (3, 3));
+    /// ```
     #[inline]
     pub fn dim(&self) -> (usize, usize) {
         (Row::to_usize(), Col::to_usize())
@@ -175,13 +170,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 
         self.0.get_unchecked_mut(i).get_unchecked_mut(j)
     }
-}
 
-impl<T, N> Matrix<T, N, N>
-    where
-        T: num::Zero + num::One,
-        N: ArrayLen<Vector<T, N>> + ArrayLen<T>,
-{
     /// Creates an identity matrix. This function is only implemented for square matrix types.
     ///
     /// ```rust
@@ -190,32 +179,16 @@ impl<T, N> Matrix<T, N, N>
     ///            Matrix::generate(|(i, j)| if i == j { 1.0 } else { 0.0 }));
     /// ```
     #[inline]
-    pub fn identity() -> Self {
+    pub fn identity() -> Self
+        where T: num::Zero + num::One
+    {
         Matrix::generate(|(i, j)| if i == j { T::one() } else { T::zero() })
     }
-}
 
-impl<T, Row, Col> From<Vector<T, Prod<Row, Col>>> for Matrix<T, Row, Col>
-    where
-        Row: ArrayLen<Vector<T, Col>> + Mul<Col>,
-        Col: ArrayLen<T>,
-        Prod<Row, Col>: ArrayLen<T> + Rem<Col>,
-        Mod<Prod<Row, Col>, Col>: Same<U0>,
-{
-    #[inline]
-    fn from(v: Vector<T, Prod<Row, Col>>) -> Self {
-        Matrix(v.into_chunks::<Col>().collect())
-    }
-}
-
-impl<T, Row, Col> Matrix<T, Row, Col>
-    where
-        T: Clone,
-        Row: ArrayLen<Vector<T, Col>> + ArrayLen<T>,
-        Col: ArrayLen<T> + ArrayLen<Vector<T, Row>>,
-{
     /// Returns the transpose of this matrix.
-    pub fn transposed(&self) -> Matrix<T, Col, Row> {
+    pub fn transposed(&self) -> Matrix<T, Col, Row>
+        where T: Clone, Col: ArrayLen<Vector<T, Row>>, Row: ArrayLen<T>
+    {
         Matrix(self.cols_iter().collect())
     }
 }
@@ -238,6 +211,19 @@ fn test_transposed() {
     assert_eq!(mat, Matrix::new([[1, 2], [3, 4]]));
     mat.transpose();
     assert_eq!(mat, Matrix::new([[1, 3], [2, 4]]));
+}
+
+impl<T, Row, Col> From<Vector<T, Prod<Row, Col>>> for Matrix<T, Row, Col>
+    where
+        Row: ArrayLen<Vector<T, Col>> + Mul<Col>,
+        Col: ArrayLen<T>,
+        Prod<Row, Col>: ArrayLen<T> + Rem<Col>,
+        Mod<Prod<Row, Col>, Col>: Same<U0>,
+{
+    #[inline]
+    fn from(v: Vector<T, Prod<Row, Col>>) -> Self {
+        Matrix(v.into_chunks::<Col>().collect())
+    }
 }
 
 impl<T, Row, Col> Default for Matrix<T, Row, Col>
@@ -720,20 +706,16 @@ impl<T, U, B> Matrix<T, UInt<U, B>, UInt<U, B>>
     ///
     /// `Matrix<T, U0, U0>` does not have this method.
     pub fn max(&self) -> T {
-        unsafe {
-            self.0.iter().map(|row| row.iter().cloned().max().unwrap_or_else(|| debug_assert_unreachable()))
-                .max().unwrap_or_else(|| debug_assert_unreachable())
-        }
+        // this `unwrap` never panic
+        self.0.iter().map(Vector::max).max().unwrap()
     }
 
     /// Returns the minimum of all elements of this matrix.
     ///
     /// `Matrix<T, U0, U0>` does not have this method.
     pub fn min(&self) -> T {
-        unsafe {
-            self.0.iter().map(|row| row.iter().cloned().min().unwrap_or_else(|| debug_assert_unreachable()))
-                .min().unwrap_or_else(|| debug_assert_unreachable())
-        }
+        // this `unwrap` never panic
+        self.0.iter().map(Vector::min).min().unwrap()
     }
 }
 

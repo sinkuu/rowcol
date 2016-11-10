@@ -9,8 +9,6 @@ use num::Float;
 
 use nodrop::NoDrop;
 
-use odds::debug_assert_unreachable;
-
 use std::ops::{Deref, DerefMut, Add, Sub, Mul, Div, Neg, Rem,
     AddAssign, SubAssign, MulAssign, DivAssign, Index, IndexMut};
 use std::marker::PhantomData;
@@ -598,10 +596,8 @@ impl<T, U, B> Vector<T, UInt<U, B>>
     /// `Vector<T, U0>` does not have this method.
     #[inline]
     pub fn max(&self) -> T {
-        match self.iter().cloned().max() {
-            Some(m) => m,
-            None => unsafe { debug_assert_unreachable() },
-        }
+        // this `unwrap` never panic
+        self.iter().cloned().max().unwrap()
     }
 
     /// Returns the minimum of all elements of this vector.
@@ -609,10 +605,8 @@ impl<T, U, B> Vector<T, UInt<U, B>>
     /// `Vector<T, U0>` does not have this method.
     #[inline]
     pub fn min(&self) -> T {
-        match self.iter().cloned().min() {
-            Some(m) => m,
-            None => unsafe { debug_assert_unreachable() },
-        }
+        // this `unwrap` never panic
+        self.iter().cloned().min().unwrap()
     }
 }
 
@@ -637,7 +631,7 @@ impl<T, U, B> Vector<T, UInt<U, B>>
     /// ```
     pub fn max_by<F>(&self, mut comp: F) -> T where F: FnMut(&T, &T) -> Ordering {
         let mut it = self.iter();
-        let mut st = it.next().unwrap_or_else(|| unsafe { debug_assert_unreachable() });
+        let mut st = it.next().unwrap(); // this `unwrap` never panic
 
         for v in it {
             if comp(v, st) == Ordering::Greater {
