@@ -38,3 +38,4 @@ extern crate odds;
 pub mod prelude;
 pub mod vector;
 pub mod matrix;
+mod util;

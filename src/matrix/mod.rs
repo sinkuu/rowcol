@@ -22,6 +22,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::fmt::Result as FmtResult;
 
 use vector::{Vector, ArrayLen};
+use util::{Min, MinImpl};
 
 /// When indexing a matrix, tuple `(row, column)` (both are `usize` and zero-based index) is used.
 pub type MatrixIdx = (usize, usize);
@@ -81,6 +82,33 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     {
         Matrix(Vector::<<Col as ArrayLen<T>>::Array, Row>::new(rows).into_iter()
                .map(Vector::new).collect())
+    }
+
+    /// Creates a diagonal matrix from provided diagonal elements.
+    ///
+    /// ```rust
+    /// # use rowcol::prelude::*;
+    /// assert_eq!(Matrix::<f32, U3, U3>::diag([1.0, 2.0, 3.0]),
+    ///            Matrix::new([[1.0, 0.0, 0.0],
+    ///                         [0.0, 2.0, 0.0],
+    ///                         [0.0, 0.0, 3.0]]));
+    /// ```
+    pub fn diag(elems: <Min<Row, Col> as ArrayLen<T>>::Array) -> Matrix<T, Row, Col>
+        where
+            T: num::Zero,
+            Row: typenum::Cmp<Col>,
+            (Row, Col, typenum::Compare<Row, Col>): MinImpl,
+            Min<Row, Col>: ArrayLen<T>,
+    {
+        let mut elems = Vector::<T, Min<Row, Col>>::new(elems).into_iter();
+        Matrix::generate(|(i, j)| {
+            if i == j {
+                elems.next().unwrap_or_else(||
+                    unsafe {  debug_assert_unreachable() })
+            } else {
+                T::zero()
+            }
+        })
     }
 }
 
