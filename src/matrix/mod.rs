@@ -192,12 +192,24 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     }
 }
 
-// TODO: fn transpose(&mut self) for Matrix<T, N, N>?
+impl<T, N> Matrix<T, N, N>
+    where
+        T: Clone,
+        N: ArrayLen<Vector<T, N>> + ArrayLen<T>,
+{
+    /// Transpose this matrix in-place. Implemented only for square matrices.
+    pub fn transpose(&mut self) {
+        *self = self.transposed();
+    }
+}
 
 #[test]
 fn test_transposed() {
-    let mat = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    let mut mat = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     assert_eq!(mat.transposed(), Matrix::new([[1, 3], [2, 4]]));
+    assert_eq!(mat, Matrix::new([[1, 2], [3, 4]]));
+    mat.transpose();
+    assert_eq!(mat, Matrix::new([[1, 3], [2, 4]]));
 }
 
 impl<T, Row, Col> Default for Matrix<T, Row, Col>
