@@ -596,11 +596,6 @@ impl<T, U, B> Vector<T, UInt<U, B>>
     /// Returns the maximum of all elements of this vector.
     ///
     /// `Vector<T, U0>` does not have this method.
-    ///
-    /// Note: Floating point numbers do not have total orders (`Ord` trait) due to NaN.
-    /// Consider using [ordered-float](https://docs.rs/crate/ordered-float/0.2.3) crate
-    /// if you need to use these comparison functionalities and you are sure that
-    /// your vector contains no NaNs.
     #[inline]
     pub fn max(&self) -> T {
         match self.iter().cloned().max() {
