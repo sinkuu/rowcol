@@ -26,3 +26,12 @@ impl<A, B> MinImpl for (A, B, Less)
     type Output = A;
 }
 
+#[test]
+fn test_typenum_min() {
+    use typenum::consts::*;
+    use typenum::Unsigned;
+
+    assert_eq!(<Min<U3, U5>>::to_usize(), 3);
+    assert_eq!(<Min<U6, U5>>::to_usize(), 5);
+    assert_eq!(<Min<U4, U4>>::to_usize(), 4);
+}
