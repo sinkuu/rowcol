@@ -14,7 +14,10 @@ use num::Complex;
 
 use approx::ApproxEq;
 
+use odds::debug_assert_unreachable;
+
 use std::ops::{Add, Mul, Rem, Neg, Index, IndexMut};
+use std::cmp::{self, Ordering};
 use std::fmt::{Debug, Display, Formatter};
 use std::fmt::Result as FmtResult;
 
@@ -655,10 +658,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Col: ArrayLen<T>,
 {
     pub fn sum(&self) -> T {
-        self.0.iter().map(|row| {
-                row.iter().cloned().fold(T::zero(), Add::add)
-            })
-            .fold(T::zero(), Add::add)
+        self.0.iter().map(Vector::sum).fold(T::zero(), Add::add)
     }
 }
 
@@ -666,6 +666,119 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 fn test_sum() {
     let m = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
     assert_eq!(m.sum(), 10);
+}
+
+impl<T, U, B> Matrix<T, UInt<U, B>, UInt<U, B>>
+    where
+        U: typenum::Unsigned,
+        B: typenum::Bit,
+        T: Clone + Ord,
+        UInt<U, B>: ArrayLen<Vector<T, UInt<U, B>>> + ArrayLen<T>,
+{
+    /// Returns the maximum of all elements of this matrix.
+    ///
+    /// `Matrix<T, U0>` does not have this method.
+    pub fn max(&self) -> T {
+        unsafe {
+            self.0.iter().map(|row| row.iter().cloned().max().unwrap_or_else(|| debug_assert_unreachable()))
+                .max().unwrap_or_else(|| debug_assert_unreachable())
+        }
+    }
+
+    /// Returns the minimum of all elements of this matrix.
+    ///
+    /// `Matrix<T, U0>` does not have this method.
+    pub fn min(&self) -> T {
+        unsafe {
+            self.0.iter().map(|row| row.iter().cloned().min().unwrap_or_else(|| debug_assert_unreachable()))
+                .min().unwrap_or_else(|| debug_assert_unreachable())
+        }
+    }
+}
+
+impl<T, U, B> Matrix<T, UInt<U, B>, UInt<U, B>>
+    where
+        U: typenum::Unsigned,
+        B: typenum::Bit,
+        T: Clone,
+        UInt<U, B>: ArrayLen<Vector<T, UInt<U, B>>> + ArrayLen<T>,
+{
+    /// Returns the maximum of all elements of this matrix, using supplied comparison function.
+    ///
+    /// `Matrix<T, U0, U0>` does not have this method.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use rowcol::prelude::*;
+    /// let v = Matrix::<i32, U2, U2>::new([[-1, 2], [3, -4]]);
+    /// assert_eq!(v.max(), 3);
+    /// assert_eq!(v.max_by(|a, b| a.abs().cmp(&b.abs())), -4);
+    /// ```
+    pub fn max_by<F>(&self, mut comp: F) -> T where F: FnMut(&T, &T) -> Ordering {
+        let mut st: Option<&T> = None;
+
+        for row in self.0.iter() {
+            for v in row.iter() {
+                if let Some(ref mut st) = st {
+                    if comp(v, st) == Ordering::Greater {
+                        *st = v;
+                    }
+                } else {
+                    st = Some(v);
+                }
+            }
+        }
+
+        st.unwrap().clone()
+    }
+
+    /// Returns the minimum of all elements of this matrix, using supplied comparison function.
+    ///
+    /// `Matrix<T, U0>` does not have this method.
+    pub fn min_by<F>(&self, mut comp: F) -> T where F: FnMut(&T, &T) -> Ordering {
+        self.max_by(|a, b| comp(b, a))
+    }
+}
+
+#[test]
+fn test_minmax() {
+    let v = Matrix::<i32, U2, U2>::new([[1, 2], [3, 4]]);
+    assert_eq!(v.max(), 4);
+    assert_eq!(v.min(), 1);
+    assert_eq!(v.max_by(|a, b| (a - 5).abs().cmp(&(b - 5).abs())), 1);
+    assert_eq!(v.min_by(|a, b| (a - 5).abs().cmp(&(b - 5).abs())), 4);
+}
+
+impl<T, Row, Col> Matrix<T, Row, Col>
+    where
+        T: Clone + Ord,
+        Row: ArrayLen<Vector<T, Col>>,
+        Col: ArrayLen<T>,
+{
+    /// Returns the clamped version of this matrix to `[min, max]`.
+    pub fn clamped(&self, min: T, max: T) -> Matrix<T, Row, Col> {
+        Matrix(self.0.iter().map(|row| {
+            row.iter().map(|v| cmp::min(&max, cmp::max(&min, &v)).clone()).collect()
+        }).collect())
+    }
+
+    /// Clamps this matrix to `[min, max]`.
+    pub fn clamp(&mut self, min: T, max: T) {
+        for row in self.0.iter_mut() {
+            for v in row.iter_mut() {
+                *v = cmp::min(&max, cmp::max(&min, v)).clone();
+            }
+        }
+    }
+}
+
+#[test]
+fn test_clamp() {
+    let mut v = Matrix::<i32, U2, U2>::new([[1, 5], [8, 2]]);
+    assert_eq!(v.clamped(4, 6), Matrix::new([[4, 5], [6, 4]]));
+    v.clamp(3, 4);
+    assert_eq!(v, Matrix::new([[3, 4], [4, 3]]));
 }
 
 
