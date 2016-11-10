@@ -657,6 +657,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         Row: ArrayLen<Vector<T, Col>>,
         Col: ArrayLen<T>,
 {
+    /// Returns the sum of all elements in this matrix.
     pub fn sum(&self) -> T {
         self.0.iter().map(Vector::sum).fold(T::zero(), Add::add)
     }
@@ -677,7 +678,7 @@ impl<T, U, B> Matrix<T, UInt<U, B>, UInt<U, B>>
 {
     /// Returns the maximum of all elements of this matrix.
     ///
-    /// `Matrix<T, U0>` does not have this method.
+    /// `Matrix<T, U0, U0>` does not have this method.
     pub fn max(&self) -> T {
         unsafe {
             self.0.iter().map(|row| row.iter().cloned().max().unwrap_or_else(|| debug_assert_unreachable()))
@@ -687,7 +688,7 @@ impl<T, U, B> Matrix<T, UInt<U, B>, UInt<U, B>>
 
     /// Returns the minimum of all elements of this matrix.
     ///
-    /// `Matrix<T, U0>` does not have this method.
+    /// `Matrix<T, U0, U0>` does not have this method.
     pub fn min(&self) -> T {
         unsafe {
             self.0.iter().map(|row| row.iter().cloned().min().unwrap_or_else(|| debug_assert_unreachable()))
@@ -735,7 +736,7 @@ impl<T, U, B> Matrix<T, UInt<U, B>, UInt<U, B>>
 
     /// Returns the minimum of all elements of this matrix, using supplied comparison function.
     ///
-    /// `Matrix<T, U0>` does not have this method.
+    /// `Matrix<T, U0, U0>` does not have this method.
     pub fn min_by<F>(&self, mut comp: F) -> T where F: FnMut(&T, &T) -> Ordering {
         self.max_by(|a, b| comp(b, a))
     }
