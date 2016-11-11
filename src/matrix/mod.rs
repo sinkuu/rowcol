@@ -30,10 +30,11 @@ pub type MatrixIdx = (usize, usize);
 /// # Examples
 ///
 /// ```rust
+/// #[macro_use] extern crate rowcol;
 /// use rowcol::prelude::*;
 ///
-/// let mut m = Matrix2f32::new([[1.0, 2.0], [3.0, 4.0]]);
-/// // Matrix2f32 is the alias for Matrix<f32, U2, U2>
+/// # fn main() {
+/// let mut m = matrix![[1.0, 2.0], [3.0, 4.0]];
 ///
 /// assert_eq!(m.transposed().determinant(), -2.0);
 /// assert_eq!((m * 2.0).determinant(), -8.0);
@@ -41,22 +42,26 @@ pub type MatrixIdx = (usize, usize);
 ///
 /// m += m * m;
 /// m /= 2.0;
-/// m *= Matrix::new([[1.0, 2.0], [3.0, 4.0]]);
+/// m *= matrix![[1.0, 2.0], [3.0, 4.0]];
+/// # }
 /// ```
 ///
 /// Indexing:
 ///
 /// ```rust
+/// # #[macro_use] extern crate rowcol;
 /// # use rowcol::prelude::*;
-/// let mut m = Matrix2f32::new([[1.0, 2.0], [3.0, 4.0]]);
+/// # fn main() {
+/// let mut m = matrix![[1.0, 2.0], [3.0, 4.0]];
 ///
 /// assert_eq!(m[(0, 0)], 1.0);
 /// m[(0, 0)] += 1.0;
-/// assert_eq!(m, Matrix::new([[2.0, 2.0], [3.0, 4.0]]));
+/// assert_eq!(m, matrix![[2.0, 2.0], [3.0, 4.0]]);
 ///
 /// // statically checked indexing
 /// assert_eq!(m[(U1::new(), U1::new())], 4.0);
 /// // assert_eq!(m[(U2::new(), U2::new())], 1.0); // error
+/// # }
 /// ```
 ///
 /// [`prelude`] provides typenum constants (`U0`, `U1`, `U2`, ...), matrix operation traits (e.g.,
@@ -72,7 +77,14 @@ pub struct Matrix<T, Row, Col>(Vector<Vector<T, Col>, Row>)
 impl<T, Row, Col> Matrix<T, Row, Col>
     where Row: ArrayLen<Vector<T, Col>>, Col: ArrayLen<T>
 {
-    /// Creates a new matrix.
+    /// Creates a new matrix. Using [`matrix` macro](../macro.matrix.html) is more convenient.
+    ///
+    /// Example:
+    ///
+    /// ```rust
+    /// # use rowcol::prelude::*;
+    /// assert_eq!(Matrix::<f32, U2, U2>::new([[1.0, 2.0], [3.0, 4.0]]).dim(), (2, 2));
+    /// ```
     pub fn new(rows: <Row as ArrayLen<<Col as ArrayLen<T>>::Array>>::Array)
         -> Matrix<T, Row, Col>
         where Row: ArrayLen<<Col as ArrayLen<T>>::Array>,
@@ -83,12 +95,17 @@ impl<T, Row, Col> Matrix<T, Row, Col>
 
     /// Creates a diagonal matrix from provided diagonal elements.
     ///
+    /// Example:
+    ///
     /// ```rust
+    /// # #[macro_use] extern crate rowcol;
     /// # use rowcol::prelude::*;
+    /// # fn main() {
     /// assert_eq!(Matrix::<f32, U3, U3>::diag([1.0, 2.0, 3.0]),
-    ///            Matrix::new([[1.0, 0.0, 0.0],
-    ///                         [0.0, 2.0, 0.0],
-    ///                         [0.0, 0.0, 3.0]]));
+    ///            matrix![[1.0, 0.0, 0.0],
+    ///                    [0.0, 2.0, 0.0],
+    ///                    [0.0, 0.0, 3.0]]);
+    /// # }
     /// ```
     pub fn diag(elems: <Min<Row, Col> as ArrayLen<T>>::Array) -> Matrix<T, Row, Col>
         where

@@ -23,15 +23,18 @@ use std::cmp::{self, Ordering};
 /// A fixed-size vector whose elements are allocated on the stack.
 ///
 /// ```rust
+/// # #[macro_use] extern crate rowcol;
 /// # use rowcol::prelude::*;
-///
-/// let arr = Vector::<i32, U5>::new([1, 2, 3, 4, 5]);
+/// # fn main() {
+/// let arr = vector![1, 2, 3, 4, 5];
 /// assert_eq!(*arr, [1, 2, 3, 4, 5]);
+/// # }
 /// ```
 pub struct Vector<T, N: ArrayLen<T>>(N::Array);
 
 impl<T, N: ArrayLen<T>> Vector<T, N> {
-    /// Creates a vector from an array.
+    /// Creates a vector from an array. Using [`vector` macro](../macro.vector.html) is more
+    /// convenient.
     #[inline]
     pub fn new(array: N::Array) -> Self {
         Vector(array)
