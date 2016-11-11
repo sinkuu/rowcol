@@ -67,7 +67,7 @@ pub type MatrixIdx = (usize, usize);
 /// [`prelude`] provides typenum constants (`U0`, `U1`, `U2`, ...), matrix operation traits (e.g.,
 /// [`Determinant`]), and aliases for `Matrix` (e.g., `Matrix2f32`).
 ///
-/// Note that matrix oprations `determinant`, `cofactor`, and `inversed` are intended to be used
+/// Note that `determinant`, `cofactor`, and `inverse` are intended to be used
 /// only with matrices containing non-integral numbers (like `f32` or `Ratio` from num crate).
 /// **Using them with integral matrices may yield wrong results.**
 ///

@@ -600,7 +600,7 @@ impl<T, U, B> Vector<T, UInt<U, B>>
     #[inline]
     pub fn max(&self) -> T {
         // this `unwrap` never panic
-        self.iter().cloned().max().unwrap()
+        self.iter().max().cloned().unwrap()
     }
 
     /// Returns the minimum of all elements of this vector.
@@ -609,7 +609,7 @@ impl<T, U, B> Vector<T, UInt<U, B>>
     #[inline]
     pub fn min(&self) -> T {
         // this `unwrap` never panic
-        self.iter().cloned().min().unwrap()
+        self.iter().min().cloned().unwrap()
     }
 }
 
@@ -669,7 +669,7 @@ impl<T, N> Vector<T, N>
 {
     /// Returns the clamped version of this vector to `[min, max]`.
     pub fn clamped(&self, min: T, max: T) -> Vector<T, N> {
-        self.iter().cloned().map(|v| cmp::min(&max, cmp::max(&min, &v)).clone()).collect()
+        self.iter().map(|v| cmp::min(&max, cmp::max(&min, v)).clone()).collect()
     }
 
     /// Clamps this vector to `[min, max]`.
