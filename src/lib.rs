@@ -6,12 +6,15 @@
 //! is `Copy`. Also, errors like computing the determinant of a non-square matrix
 //! can be detected at compile-time, instead of causing runtime panic.
 //!
-//! ```rust
+//! ```rust,ignore
 //! use rowcol::prelude::*;
 //!
 //! fn fib(n: usize) -> u64 {
-//!     let f = Vector::<u64, U2>::new([1, 0]);
-//!     let a = Matrix::<u64, U2, U2>::new([[1, 1], [1, 0]]);
+//!     // f: Vector<i32, U2>
+//!     let f = vector![1, 0];
+//!
+//!     // a: Matrix<u32, U2, U2>
+//!     let a = matrix![[1, 1], [1, 0]];
 //!
 //!     (a.pow(n) * f)[1]
 //! }
@@ -37,5 +40,20 @@ extern crate nodrop;
 pub mod prelude;
 pub mod vector;
 pub mod matrix;
-mod macros;
+#[macro_use] mod macros;
 mod util;
+
+// #[macro_use] can't be used in doc test
+#[test]
+fn test_module_doc() {
+    fn fib(n: usize) -> u64 {
+        let f = vector![1, 0];
+        let a = matrix![[1, 1], [1, 0]];
+
+        (a.pow(n) * f)[1]
+    }
+
+    assert_eq!(fib(0), 0);
+    assert_eq!(fib(10), 55);
+    assert_eq!(fib(50), 12586269025);
+}

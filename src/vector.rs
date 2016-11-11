@@ -110,7 +110,7 @@ impl<T, N: ArrayLen<T>> Vector<T, N> {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        false
+        N::to_usize() == 0
     }
 }
 

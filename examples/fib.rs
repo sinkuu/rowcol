@@ -1,13 +1,16 @@
-extern crate rowcol;
+#[macro_use] extern crate rowcol;
 extern crate num;
 
 use rowcol::prelude::*;
 
 fn main() {
-    let f = Vector::<u64, U2>::new([1, 0]);
-    let a = Matrix::<u64, U2, U2>::new([[1, 1], [1, 0]]);
+    // f: Vector<i32, U2>
+    let f = vector![1, 0];
+    // a: Matrix<u32, U2, U2>
+    let a = matrix![[1, 1], [1, 0]];
 
-    let mut p = Matrix::<u64, U2, U2>::identity();
+    // p: Matrix<u32, U2, U2> (inferred)
+    let mut p = Matrix::identity();
 
     for n in 0..50 {
         println!("fib({:2}) = {}", n, (p * f)[1]);
