@@ -4,12 +4,10 @@ extern crate num;
 use rowcol::prelude::*;
 
 fn main() {
-    // f: Vector<i32, U2>
-    let f = vector![1, 0];
-    // a: Matrix<u32, U2, U2>
-    let a = matrix![[1, 1], [1, 0]];
+    let f: Vector<u64, _> = vector![1, 0];
+    let a: Matrix<u64, _, _> = matrix![[1, 1], [1, 0]];
 
-    // p: Matrix<u32, U2, U2> (inferred)
+    // p: Matrix<u64, U2, U2> (inferred)
     let mut p = Matrix::identity();
 
     for n in 0..50 {

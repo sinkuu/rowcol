@@ -7,13 +7,14 @@
 //! can be detected at compile-time, instead of causing runtime panic.
 //!
 //! ```rust,ignore
+//! #[macro_use] extern crate rowcol;
 //! use rowcol::prelude::*;
 //!
 //! fn fib(n: usize) -> u64 {
-//!     // f: Vector<i32, U2>
+//!     // inferred `f: Vector<u64, U2>`
 //!     let f = vector![1, 0];
 //!
-//!     // a: Matrix<u32, U2, U2>
+//!     // inferred `a: Matrix<u64, U2, U2>`
 //!     let a = matrix![[1, 1], [1, 0]];
 //!
 //!     (a.pow(n) * f)[1]
@@ -47,8 +48,10 @@ mod util;
 #[test]
 fn test_module_doc() {
     fn fib(n: usize) -> u64 {
-        let f = vector![1, 0];
-        let a = matrix![[1, 1], [1, 0]];
+        use ::prelude::*;
+
+        let f: Vector<u64, U2> = vector![1, 0];
+        let a: Matrix<u64, U2, U2> = matrix![[1, 1], [1, 0]];
 
         (a.pow(n) * f)[1]
     }
