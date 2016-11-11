@@ -37,4 +37,5 @@ extern crate nodrop;
 pub mod prelude;
 pub mod vector;
 pub mod matrix;
+mod macros;
 mod util;
