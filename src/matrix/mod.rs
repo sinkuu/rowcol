@@ -192,20 +192,6 @@ impl<T, Row, Col> Matrix<T, Row, Col>
         self.0.get_unchecked_mut(i).get_unchecked_mut(j)
     }
 
-    /// Creates an identity matrix. This function is only implemented for square matrix types.
-    ///
-    /// ```rust
-    /// # use rowcol::prelude::*;
-    /// assert_eq!(Matrix::<f32, U3, U3>::identity(),
-    ///            Matrix::generate(|(i, j)| if i == j { 1.0 } else { 0.0 }));
-    /// ```
-    #[inline]
-    pub fn identity() -> Self
-        where T: num::Zero + num::One
-    {
-        Matrix::generate(|(i, j)| if i == j { T::one() } else { T::zero() })
-    }
-
     /// Returns the transpose of this matrix.
     pub fn transposed(&self) -> Matrix<T, Col, Row>
         where T: Clone, Col: ArrayLen<Vector<T, Row>>, Row: ArrayLen<T>
@@ -219,8 +205,22 @@ impl<T, N> Matrix<T, N, N>
         T: Clone,
         N: ArrayLen<Vector<T, N>> + ArrayLen<T>,
 {
-    /// Transpose this matrix in-place. Implemented only for square matrices.
-    pub fn transpose(&mut self) {
+    /// Creates an identity matrix. This method is available only for square matrices.
+    ///
+    /// ```rust
+    /// # use rowcol::prelude::*;
+    /// assert_eq!(Matrix::<f32, U3, U3>::identity(),
+    ///            Matrix::generate(|(i, j)| if i == j { 1.0 } else { 0.0 }));
+    /// ```
+    #[inline]
+    pub fn identity() -> Self
+        where T: num::Zero + num::One
+    {
+        Matrix::generate(|(i, j)| if i == j { T::one() } else { T::zero() })
+    }
+
+    /// Transpose this matrix in-place. This method is available only for square matrices.
+    pub fn transpose(&mut self) where T: Clone {
         *self = self.transposed();
     }
 }
