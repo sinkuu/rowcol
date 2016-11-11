@@ -11,10 +11,10 @@
 //! use rowcol::prelude::*;
 //!
 //! fn fib(n: usize) -> u64 {
-//!     // inferred `f: Vector<u64, U2>`
+//!     // inferred as `f: Vector<u64, U2>`
 //!     let f = vector![1, 0];
 //!
-//!     // inferred `a: Matrix<u64, U2, U2>`
+//!     // inferred as `a: Matrix<u64, U2, U2>`
 //!     let a = matrix![[1, 1], [1, 0]];
 //!
 //!     (a.pow(n) * f)[1]
