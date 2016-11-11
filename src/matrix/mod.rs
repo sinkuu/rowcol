@@ -46,7 +46,7 @@ pub type MatrixIdx = (usize, usize);
 /// # }
 /// ```
 ///
-/// Indexing:
+/// ## Indexing
 ///
 /// ```rust
 /// # #[macro_use] extern crate rowcol;

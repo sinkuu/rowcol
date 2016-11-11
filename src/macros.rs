@@ -1,5 +1,18 @@
 /// Creates a [`Vector`] containing given elements.
 ///
+/// # Example
+///
+/// ```rust
+/// # #[macro_use] extern crate rowcol;
+/// # use rowcol::prelude::*;
+/// # fn main() {
+/// assert_eq!(vector![1, 2, 3, 4] + vector![4, 3, 2, 1],
+///            vector![5, 5, 5, 5]);
+/// # }
+/// ```
+///
+/// # Note
+///
 /// The compiler cannot figure out the type of `Vector::new([1.0, 2.0])` from itself.
 /// This macro counts the number of elements you provided, and hints it to the compiler.
 ///
@@ -36,6 +49,19 @@ macro_rules! vector {
 }
 
 /// Creates a [`Matrix`] from given elements.
+///
+/// # Example
+///
+/// ```rust
+/// # #[macro_use] extern crate rowcol;
+/// # use rowcol::prelude::*;
+/// # fn main() {
+/// let m1 = matrix![[1, 2], [3, 4]];
+/// assert_eq!(m1 * 2, matrix![[2, 4], [6, 8]]);
+/// # }
+/// ```
+///
+/// # Note
 ///
 /// The compiler cannot figure out the type of `Matrix::new([[1.0, 2.0], [3.0, 4.0]])`
 /// from itself. This macro counts the number of elements you provided, and hints it to the compiler.
