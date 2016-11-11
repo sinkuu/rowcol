@@ -69,7 +69,7 @@ fn bench_det(b: &mut Bencher) {
 
 #[bench]
 fn bench_transpose(b: &mut Bencher) {
-    let m = Matrix::<f32, U8, U8>::generate(|(i, j)| 0.12 * ((j+i) as f32).powi(i as i32));
+    let m = Matrix::<f32, U32, U32>::generate(|(i, j)| 0.12 * ((j+i) as f32).powi(i as i32));
 
     b.iter(|| m.transposed());
 }

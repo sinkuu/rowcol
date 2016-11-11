@@ -67,6 +67,10 @@ pub type MatrixIdx = (usize, usize);
 /// [`prelude`] provides typenum constants (`U0`, `U1`, `U2`, ...), matrix operation traits (e.g.,
 /// [`Determinant`]), and aliases for `Matrix` (e.g., `Matrix2f32`).
 ///
+/// Note that matrix oprations `determinant`, `cofactor`, and `inversed` are intended to be used
+/// only with matrices containing non-integral numbers (like `f32` or `Ratio` from num crate).
+/// **Using them with integral matrices may yield wrong results.**
+///
 /// [`prelude`]: ../prelude/index.html
 /// [`Determinant`]: ./ops/trait.Determinant.html
 pub struct Matrix<T, Row, Col>(Vector<Vector<T, Col>, Row>)
@@ -799,7 +803,7 @@ impl<T, Row, Col> Matrix<T, Row, Col>
     /// Returns the clamped version of this matrix to `[min, max]`.
     pub fn clamped(&self, min: T, max: T) -> Matrix<T, Row, Col> {
         Matrix(self.0.iter().map(|row| {
-            row.iter().map(|v| cmp::min(&max, cmp::max(&min, &v)).clone()).collect()
+            row.iter().map(|v| cmp::min(&max, cmp::max(&min, v)).clone()).collect()
         }).collect())
     }
 

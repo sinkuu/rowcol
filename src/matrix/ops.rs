@@ -15,11 +15,16 @@ macro_rules! idx {
     }
 }
 
-/// Trait for computing determinants of square matrices.
+/// Trait for computing the determinant of a square matrix.
+///
+/// # Note
+///
+/// This is intended to use with matrices containing floating numbers.
+/// **Computing the determinant of an integral matrix may yield a wrong result.**
 pub trait Determinant {
     type Output;
 
-    /// Computes determinant of this matrix.
+    /// Returns the determinant of this matrix.
     fn determinant(&self) -> Self::Output;
 }
 
@@ -70,7 +75,8 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
         Ba: typenum::Bit,
         Bb: typenum::Bit,
         Bc: typenum::Bit,
-        T: num::Float + Clone + ::std::fmt::Display,
+        T: Add<T, Output = T> + Sub<T, Output = T> + Mul<T, Output = T> + Div<T, Output = T> +
+            num::One + num::Zero + Clone + ::std::fmt::Display,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
             Sub<U1> + for<'a> ArrayLen<&'a T> + ArrayLen<usize> + ArrayLen<Vector<(String, usize), UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
@@ -110,11 +116,16 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
     }
 }
 
-/// Trait for computing cofactors of square matrices.
+/// Trait for computing the cofactor of a square matrix.
+///
+/// # Note
+///
+/// This is intended to use with matrices containing floating numbers.
+/// **Computing the cofactor of an integral matrix may yield a wrong result.**
 pub trait Cofactor {
     type Output;
 
-    /// Computes cofactor of this matrix.
+    /// Returns the cofactor of this matrix.
     fn cofactor(&self, idx: MatrixIdx) -> Self::Output;
 }
 
@@ -226,6 +237,12 @@ fn test_det_cof_impl() {
     assert_relative_eq!(m.determinant(), -535680.0);
 }
 
+/// Trait for computing the inverse of a square matrix.
+///
+/// # Note
+///
+/// This is intended to use with matrices containing floating numbers.
+/// **The inverse of an integral matrix may be wrong.**
 pub trait Inverse {
     type Output;
 

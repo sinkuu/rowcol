@@ -716,7 +716,9 @@ impl<T, N> FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
             }
 
             // making this `assert_eq` slows down matrix multiplication by 7x in release build!
-            debug_assert_eq!(it.count(), 0, "Vector<_, U{0}> can only be created with exactly {0} elements.", N::to_usize());
+            debug_assert_eq!(it.count(), 0,
+                             "Vector<_, U{0}> can only be created with exactly {0} elements.",
+                             N::to_usize());
 
             arr.into_inner()
         };
@@ -938,7 +940,6 @@ impl_arraylen!(U32, 32);
 
 #[test]
 fn test_array() {
-    use std::ops::Sub;
     // rustc bug (broken MIR) https://github.com/rust-lang/rust/issues/28828
     // use typenum::Diff;
     // let a: Vector<i32, Diff<U8, U3>> = Default::default();

@@ -339,7 +339,7 @@ impl<'a, T, Row, Col> Div<&'a T> for Matrix<T, Row, Col>
 
     fn div(self, rhs: &'a T) -> Self::Output {
         Matrix(self.0.into_iter().map(|row| {
-            row / &rhs
+            row / rhs
         }).collect())
     }
 }
