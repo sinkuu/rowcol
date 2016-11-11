@@ -19,7 +19,7 @@ macro_rules! idx {
 pub trait Determinant {
     type Output;
 
-    /// Computes determinant of the matrix.
+    /// Computes determinant of this matrix.
     fn determinant(&self) -> Self::Output;
 }
 
@@ -114,7 +114,7 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
 pub trait Cofactor {
     type Output;
 
-    /// Computes cofactor of the matrix.
+    /// Computes cofactor of this matrix.
     fn cofactor(&self, idx: MatrixIdx) -> Self::Output;
 }
 
