@@ -704,7 +704,7 @@ impl<T, N> FromIterator<T> for Vector<T, N> where N: ArrayLen<T> {
                     None => {
                         let mut arr = arr.into_inner();
                         for j in 0..i {
-                            mem::drop(ptr::read(arr.as_mut().get_unchecked_mut(j)));
+                            ptr::drop_in_place(arr.as_mut().get_unchecked_mut(j));
                         }
                         mem::forget(arr);
 
@@ -750,7 +750,7 @@ pub struct IntoIter<T, N> where N: ArrayLen<T> {
 impl<T, N> Drop for IntoIter<T, N> where N: ArrayLen<T> {
     fn drop(&mut self) {
         for i in self.next..self.back {
-            mem::drop(unsafe { ptr::read(self.arr.as_ref().get_unchecked(i)) });
+            unsafe { ptr::drop_in_place(self.arr.as_mut().get_unchecked_mut(i)) };
         }
     }
 }
