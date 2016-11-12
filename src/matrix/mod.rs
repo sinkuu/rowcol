@@ -16,7 +16,8 @@ use approx::ApproxEq;
 
 use std::ops::{Add, Mul, Rem, Neg, Index, IndexMut};
 use std::cmp::{self, Ordering};
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Formatter};
+#[cfg(any(test, feature = "std"))] use std::fmt::Display;
 use std::fmt::Result as FmtResult;
 
 use vector::{Vector, ArrayLen};

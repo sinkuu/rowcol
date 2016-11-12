@@ -76,12 +76,12 @@ impl<T, U, Ba, Bb, Bc> Determinant for Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>
         Bb: typenum::Bit,
         Bc: typenum::Bit,
         T: Add<T, Output = T> + Sub<T, Output = T> + Mul<T, Output = T> + Div<T, Output = T> +
-            num::One + num::Zero + Clone + ::std::fmt::Display,
+            num::One + num::Zero + Clone,
         UInt<UInt<UInt<U, Ba>, Bb>, Bc>:
             ArrayLen<T> + ArrayLen<Vector<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
-            Sub<U1> + for<'a> ArrayLen<&'a T> + ArrayLen<usize> + ArrayLen<Vector<(String, usize), UInt<UInt<UInt<U, Ba>, Bb>, Bc>>> +
-            ArrayLen<(String, usize)>,
-        Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>: Cofactor<Output = T>,
+            Sub<U1> + for<'a> ArrayLen<&'a T>,
+        Matrix<T, UInt<UInt<UInt<U, Ba>, Bb>, Bc>, UInt<UInt<UInt<U, Ba>, Bb>, Bc>>:
+            Cofactor<Output = T>,
 {
     type Output = T;
 
