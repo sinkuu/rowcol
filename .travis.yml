@@ -15,4 +15,4 @@ after_success:
     - wget https://github.com/SimonKagstrom/kcov/archive/v31.tar.gz
     - tar xzf master.tar.gz
     - cd kcov-31 && mkdir build && cd build && cmake .. && make && cd ../..
-    - ./kcov-master/build/src/kcov --coveralls-id=$TRAVIS_JOB_ID --exclude-pattern=/.cargo target/kcov target/debug/rowcol-*
+    - ./kcov-31/build/src/kcov --coveralls-id=$TRAVIS_JOB_ID --exclude-pattern=/.cargo target/kcov target/debug/rowcol-*
