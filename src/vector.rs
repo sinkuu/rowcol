@@ -783,6 +783,15 @@ impl<T, N> Iterator for IntoIter<T, N> where N: ArrayLen<T> {
     fn count(self) -> usize {
         self.len()
     }
+
+    fn nth(&mut self, n: usize) -> Option<T> {
+        for i in self.next..self.next+n {
+            unsafe { ptr::drop_in_place(self.arr.as_mut().get_unchecked_mut(i)) };
+        }
+
+        self.next += n;
+        self.next()
+    }
 }
 
 impl<T, N> DoubleEndedIterator for IntoIter<T, N> where N: ArrayLen<T> {
@@ -802,8 +811,9 @@ impl<T, N> DoubleEndedIterator for IntoIter<T, N> where N: ArrayLen<T> {
 }
 
 #[test]
-fn test_vec_intoiter_next_back() {
+fn test_vec_intoiter() {
     let v = Vector::<i32, U3>::new([1, 2, 3]);
+    assert_eq!(v.into_iter().nth(1), Some(2));
     assert!(v.into_iter().rev().eq(vec![3, 2, 1]));
 }
 
